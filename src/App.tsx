@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ToastContainer } from './components/ToastContainer';
+import { OrderDetailModal } from './components/modals/OrderDetailModal';
 import {
   DeliveryModal,
   DiscrepancyModal,
@@ -43,9 +44,10 @@ export default function App() {
   } = useOrderStore();
 
   const [activePage, setActivePage] = useState<Department>('production');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [printingOrderId, setPrintingOrderId] = useState<string | null>(null);
 
-  // Modal states
+  // Action Sub-Modal states
   const [weightTarget, setWeightTarget] = useState<{
     order: Order;
     item: OrderItem;
@@ -59,7 +61,21 @@ export default function App() {
   const [returnOrder, setReturnOrder] = useState<Order | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
 
+  const selectedOrder =
+    selectedOrderId !== null
+      ? orders.find((o) => o.id === selectedOrderId) ?? null
+      : null;
+
+  const hasSubModalOpen =
+    weightTarget !== null ||
+    rejectTarget !== null ||
+    discrepancyOrder !== null ||
+    deliveryOrder !== null ||
+    returnOrder !== null ||
+    resetOpen;
+
   const handleSelectPage = (page: Department) => {
+    setSelectedOrderId(null);
     setActivePage(page);
     if (page === 'production' || page === 'finance' || page === 'shipping') {
       flushDeptNotifications(page);
@@ -127,16 +143,7 @@ export default function App() {
               orders={orders}
               printingOrderId={printingOrderId}
               onPrintAll={handlePrintAll}
-              onPrintSingle={handlePrintSingle}
-              onApproveOrder={approveProductionOrder}
-              onOpenReject={(order) =>
-                setRejectTarget({ order, source: 'production' })
-              }
-              onOpenWeight={(order, item) => setWeightTarget({ order, item })}
-              onCompleteProduction={completeProduction}
-              onConfirmReturn={(orderId) =>
-                confirmReturnByDepartment(orderId, 'production')
-              }
+              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
             />
           )}
 
@@ -145,15 +152,7 @@ export default function App() {
               orders={orders}
               printingOrderId={printingOrderId}
               onPrintAll={handlePrintAll}
-              onPrintSingle={handlePrintSingle}
-              onApproveFinance={approveFinance}
-              onOpenReject={(order) =>
-                setRejectTarget({ order, source: 'finance' })
-              }
-              onCallCustomer={handleCallCustomer}
-              onConfirmReturn={(orderId) =>
-                confirmReturnByDepartment(orderId, 'finance')
-              }
+              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
             />
           )}
 
@@ -162,15 +161,7 @@ export default function App() {
               orders={orders}
               printingOrderId={printingOrderId}
               onPrintAll={handlePrintAll}
-              onPrintSingle={handlePrintSingle}
-              onSelectDriver={setOrderDriver}
-              onOpenDiscrepancy={(order) => setDiscrepancyOrder(order)}
-              onOpenDelivery={(order) => setDeliveryOrder(order)}
-              onOpenReturn={(order) => setReturnOrder(order)}
-              onConfirmReturn={(orderId) =>
-                confirmReturnByDepartment(orderId, 'shipping')
-              }
-              onDriverMissingWarning={handleDriverMissingWarning}
+              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
             />
           )}
 
@@ -183,7 +174,32 @@ export default function App() {
       {/* Toasts */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Workflow Modals */}
+      {/* Main Order Detail & Action Popup Modal */}
+      {(activePage === 'production' ||
+        activePage === 'finance' ||
+        activePage === 'shipping') && (
+        <OrderDetailModal
+          order={selectedOrder}
+          department={activePage}
+          disableEscape={hasSubModalOpen}
+          onClose={() => setSelectedOrderId(null)}
+          onPrintSingle={handlePrintSingle}
+          onApproveProduction={approveProductionOrder}
+          onOpenWeight={(order, item) => setWeightTarget({ order, item })}
+          onCompleteProduction={completeProduction}
+          onApproveFinance={approveFinance}
+          onCallCustomer={handleCallCustomer}
+          onSelectDriver={setOrderDriver}
+          onOpenDiscrepancy={(order) => setDiscrepancyOrder(order)}
+          onOpenDelivery={(order) => setDeliveryOrder(order)}
+          onOpenReturn={(order) => setReturnOrder(order)}
+          onDriverMissingWarning={handleDriverMissingWarning}
+          onOpenReject={(order, source) => setRejectTarget({ order, source })}
+          onConfirmReturn={confirmReturnByDepartment}
+        />
+      )}
+
+      {/* Action Sub-Modals */}
       <WeightModal
         open={weightTarget !== null}
         item={weightTarget?.item ?? null}
@@ -244,7 +260,10 @@ export default function App() {
       <ResetConfirmModal
         open={resetOpen}
         onClose={() => setResetOpen(false)}
-        onConfirm={resetDemoData}
+        onConfirm={() => {
+          setSelectedOrderId(null);
+          resetDemoData();
+        }}
       />
     </div>
   );

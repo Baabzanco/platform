@@ -1,37 +1,27 @@
 import React, { useMemo, useState } from 'react';
 import {
-  AlertCircle,
   ArrowLeftRight,
   Boxes,
-  Check,
-  CheckCheck,
   ChevronLeft,
   ClipboardList,
-  Edit3,
+  Package,
   Printer,
   RotateCcw,
   Search,
-  X,
   Zap,
 } from 'lucide-react';
 import { DEPARTMENT_LABELS } from '../../data/initialOrders';
-import { Order, OrderItem } from '../../types/order';
+import { Order } from '../../types/order';
 import {
   buildPreparationSummary,
   formatWeight,
 } from '../../utils/formatters';
-import { ReturnResolutionBox } from '../ReturnResolutionBox';
 
 interface ProductionPageProps {
   orders: Order[];
   printingOrderId: string | null;
   onPrintAll: () => void;
-  onPrintSingle: (orderId: string) => void;
-  onApproveOrder: (orderId: string) => void;
-  onOpenReject: (order: Order) => void;
-  onOpenWeight: (order: Order, item: OrderItem) => void;
-  onCompleteProduction: (orderId: string) => void;
-  onConfirmReturn: (orderId: string) => void;
+  onSelectOrder: (orderId: string) => void;
 }
 
 type ProdTab = 'orders' | 'prep';
@@ -58,24 +48,43 @@ function isProdPriority(order: Order): boolean {
 }
 
 function getProductionSortRank(order: Order): number {
-  if (isPendingReturnConfirmInProd(order)) return 0; // Highest urgency: returned order awaiting confirmation
-  if (order.status === 'in_production') return 1;     // Active in production -> top priority
+  if (isPendingReturnConfirmInProd(order)) return 0;
+  if (order.status === 'in_production') return 1;
   if (order.status === 'pending_production_approval') return 2;
   if (isCompletedInProd(order)) return 3;
-  if (order.status === 'returned') return 4;          // Confirmed return
-  return 5;                                           // rejected
+  if (order.status === 'returned') return 4;
+  return 5;
+}
+
+function getProductionStatusDisplay(order: Order): { label: string; className: string } {
+  if (order.status === 'rejected') {
+    const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
+    return { label: `رد شده (${src})`, className: 'text-red-700' };
+  }
+  if (order.status === 'returned') {
+    const confirmed = order.returnRecord?.confirmations.production.confirmed;
+    return confirmed
+      ? { label: 'مرجوعی تایید شده', className: 'text-emerald-700' }
+      : { label: 'مرجوع شده — نیازمند تایید تولید', className: 'text-red-700' };
+  }
+  if (order.status === 'in_production') {
+    const weighed = order.items.filter((i) => i.producedWeight !== null).length;
+    return {
+      label: `در حال توزین (${weighed} از ${order.items.length})`,
+      className: 'text-[#0f5864]',
+    };
+  }
+  if (isCompletedInProd(order)) {
+    return { label: 'تولید تکمیل و ارسال به مالی', className: 'text-emerald-700' };
+  }
+  return { label: 'در انتظار تایید تولید', className: 'text-slate-600' };
 }
 
 export const ProductionPage: React.FC<ProductionPageProps> = ({
   orders,
   printingOrderId,
   onPrintAll,
-  onPrintSingle,
-  onApproveOrder,
-  onOpenReject,
-  onOpenWeight,
-  onCompleteProduction,
-  onConfirmReturn,
+  onSelectOrder,
 }) => {
   const [activeTab, setActiveTab] = useState<ProdTab>('orders');
   const [searchQuery, setSearchQuery] = useState('');
@@ -223,9 +232,9 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
         )}
       </div>
 
-      {/* Tab 1: Orders List */}
+      {/* Tab 1: Collapsed Order Cards (Click to open popup) */}
       {activeTab === 'orders' && (
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3">
           {sortedAndFilteredOrders.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
               <p className="text-sm font-medium text-slate-600 mb-3">
@@ -250,28 +259,20 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
               const pendingReturnConfirm = isPendingReturnConfirmInProd(order);
               const inProduction = order.status === 'in_production';
               const weighedCount = order.items.filter((i) => i.producedWeight !== null).length;
-              const allItemsWeighed = inProduction && weighedCount === order.items.length;
+              const totalReqKg = order.items.reduce((s, i) => s + i.requestedWeight, 0);
+              const statusDisplay = getProductionStatusDisplay(order);
 
-              const showOtherDivider =
-                priorityCount > 0 && index === priorityCount;
+              const showOtherDivider = priorityCount > 0 && index === priorityCount;
 
               const cardStyle = pendingReturnConfirm
-                ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
+                ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20 hover:bg-red-50/30'
                 : rejected || returned
-                  ? 'border border-red-400 bg-red-50/20'
+                  ? 'border border-red-300 bg-red-50/20 hover:border-red-400'
                   : inProduction
-                    ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
+                    ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15 hover:bg-[#f4fafa]'
                     : completed
-                      ? 'border border-emerald-500 bg-emerald-50/20'
-                      : 'border border-[#7a9cbf] bg-white';
-
-              const headerBg = rejected || returned
-                ? 'bg-red-100/80'
-                : inProduction
-                  ? 'bg-[#eef6f7]'
-                  : completed
-                    ? 'bg-emerald-50'
-                    : 'bg-slate-50';
+                      ? 'border border-emerald-400 bg-emerald-50/25 hover:border-emerald-500'
+                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864] hover:shadow-xs';
 
               return (
                 <React.Fragment key={order.id}>
@@ -289,214 +290,105 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                       printingOrderId === order.id ? 'print-target' : ''
                     } rounded-lg overflow-hidden transition-all ${cardStyle}`}
                   >
-                    {/* Featured Return Priority Strip */}
-                    {pendingReturnConfirm && (
-                      <div className="no-print px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
-                          <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                          اولویت فوری — سفارش توسط بخش ارسال مرجوع شده و نیازمند تایید مرجوعی در تولید است
-                        </span>
-                        <span className="tabular-nums opacity-95 font-medium">
-                          سفارش {order.code}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Featured Active Workflow Strip */}
-                    {inProduction && (
-                      <div className="no-print px-5 py-2 bg-[#0f5864] text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
-                          <Zap className="w-3.5 h-3.5 shrink-0" />
-                          در پروسه اقدام تولید — اولویت ثبت وزن اقلام
-                        </span>
-                        <span className="tabular-nums opacity-95 font-medium">
-                          پیشرفت توزین: {weighedCount} از {order.items.length} قلم
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Card Header (Order Code & Delivery Slot only — no customer name) */}
-                    <div
-                      className={`px-5 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3 ${headerBg}`}
+                    {/* Clickable Collapsed Summary Surface */}
+                    <button
+                      type="button"
+                      onClick={() => onSelectOrder(order.id)}
+                      className="w-full text-right block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
                     >
-                      <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-[13px]">
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-500">کد سفارش</span>
-                          <span
-                            className={`tabular-nums font-bold ${
-                              rejected || returned ? 'text-red-700' : 'text-[#0056b3]'
-                            }`}
-                          >
-                            {order.code}
+                      {pendingReturnConfirm && (
+                        <div className="no-print px-5 py-1.5 bg-red-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                            اولویت فوری — سفارش مرجوع شده و نیازمند تایید مرجوعی در تولید
+                          </span>
+                          <span className="opacity-95 text-[11px]">کلیک برای اقدام</span>
+                        </div>
+                      )}
+
+                      {inProduction && (
+                        <div className="no-print px-5 py-1.5 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            <Zap className="w-3.5 h-3.5 shrink-0" />
+                            در پروسه اقدام تولید — اولویت ثبت وزن اقلام
+                          </span>
+                          <span className="tabular-nums opacity-95 text-[11px]">
+                            توزین: {weighedCount} از {order.items.length} قلم
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-500">بازه ارسال</span>
-                          <span className="font-medium text-slate-800">
-                            {order.deliverySlot}
-                          </span>
+                      )}
+
+                      <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 flex-1 items-center text-[13px]">
+                          <div>
+                            <span className="block text-[11px] text-slate-500 mb-0.5">کد سفارش</span>
+                            <span
+                              className={`tabular-nums text-[15px] font-bold ${
+                                rejected || returned ? 'text-red-700' : 'text-[#0056b3]'
+                              }`}
+                            >
+                              {order.code}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] text-slate-500 mb-0.5">بازه ارسال</span>
+                            <span className="font-semibold text-slate-800">{order.deliverySlot}</span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] text-slate-500 mb-0.5">اقلام و وزن کل</span>
+                            <span className="tabular-nums font-medium text-slate-700 inline-flex items-center gap-1.5">
+                              <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              {order.items.length} قلم · {formatWeight(totalReqKg)}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت</span>
+                            <span className={`font-bold text-xs ${statusDisplay.className}`}>
+                              {statusDisplay.label}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="no-print inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f5864] shrink-0">
+                          <span>مشاهده و اقدام</span>
+                          <ChevronLeft className="w-4 h-4" />
                         </div>
                       </div>
+                    </button>
 
-                      <div className="no-print flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onPrintSingle(order.id)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-white border border-slate-300 rounded-md hover:bg-slate-100 hover:text-slate-900 transition-colors whitespace-nowrap"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          پرینت
-                        </button>
-
-                        {order.status === 'pending_production_approval' && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => onApproveOrder(order.id)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300 rounded-md hover:bg-emerald-700 hover:text-white transition-colors whitespace-nowrap"
-                            >
-                              <Check className="w-3.5 h-3.5" />
-                              تایید سفارش
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => onOpenReject(order)}
-                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                              رد سفارش
-                            </button>
-                          </>
-                        )}
-
-                        {inProduction && !allItemsWeighed && (
-                          <button
-                            type="button"
-                            onClick={() => onOpenReject(order)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-red-50 text-red-700 border border-red-200 rounded-md hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            رد سفارش
-                          </button>
-                        )}
-
-                        {allItemsWeighed && (
-                          <button
-                            type="button"
-                            onClick={() => onCompleteProduction(order.id)}
-                            className="inline-flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-md hover:bg-emerald-700 shadow-xs transition-colors whitespace-nowrap"
-                          >
-                            <CheckCheck className="w-4 h-4" />
-                            اتمام تولید و ارسال به مالی
-                          </button>
-                        )}
-
-                        {completed && (
-                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-slate-600 text-white rounded-md whitespace-nowrap">
-                            <CheckCheck className="w-4 h-4" />
-                            تولید تکمیل و به مالی ارسال شد
-                          </span>
-                        )}
-
-                        {returned && (
-                          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-red-600 text-white rounded-md whitespace-nowrap">
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            مرجوع شده از بخش ارسال
-                          </span>
-                        )}
+                    {/* Print-only Full Detail Table */}
+                    <div className="hidden print:block border-t border-slate-200 bg-white">
+                      <div className="px-5 py-2 text-xs text-slate-700 border-b border-slate-200">
+                        <strong>توضیحات:</strong> {order.notes}
                       </div>
-                    </div>
-
-                    {/* Rejection Alert */}
-                    {rejected && order.rejection && (
-                      <div className="px-5 py-3 bg-red-100 text-red-900 border-b border-red-300 text-[13px] flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 shrink-0 text-red-700" />
-                        <span>
-                          سفارش توسط <strong>{DEPARTMENT_LABELS[order.rejection.source]}</strong> رد شد — دلیل:{' '}
-                          <strong>{order.rejection.reason}</strong>
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Order Notes */}
-                    <div className="px-5 py-2.5 bg-amber-50/90 text-amber-900 border-b border-slate-200 text-[13px]">
-                      <strong>توضیحات:</strong> {order.notes}
-                    </div>
-
-                    {/* Items Table */}
-                    <div className="overflow-x-auto">
-                      <table
-                        className={`w-full border-collapse text-[13px] ${
-                          rejected ? 'opacity-60' : ''
-                        }`}
-                      >
+                      <table className="w-full border-collapse text-xs">
                         <thead>
-                          <tr className="bg-white border-b border-slate-200 text-slate-500">
-                            <th className="text-right font-normal px-5 py-2.5">نام محصول</th>
-                            <th className="text-right font-normal px-5 py-2.5">مقدار درخواستی</th>
-                            <th className="text-right font-normal px-5 py-2.5">وضعیت / اقدام</th>
+                          <tr className="border-b border-slate-200 text-slate-500">
+                            <th className="text-right px-5 py-2">نام محصول</th>
+                            <th className="text-right px-5 py-2">مقدار درخواستی</th>
+                            <th className="text-right px-5 py-2">وزن ثبت‌شده</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white">
-                          {order.items.map((item) => {
-                            const weighed = item.producedWeight !== null;
-                            return (
-                              <tr key={item.id} className="hover:bg-slate-50/60 transition-colors">
-                                <td className="px-5 py-3 font-medium text-slate-900">
-                                  {item.productName}
-                                </td>
-                                <td className="tabular-nums px-5 py-3 text-slate-700">
-                                  {formatWeight(item.requestedWeight)}
-                                </td>
-                                <td className="px-5 py-3">
-                                  {weighed ? (
-                                    <div className="inline-flex items-center gap-2 flex-wrap">
-                                      <span className="tabular-nums inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-1 rounded text-xs font-medium">
-                                        <Check className="w-3.5 h-3.5" />
-                                        تحویل داده شده ({formatWeight(item.producedWeight!)})
-                                      </span>
-                                      {item.returnedWeight > 0 && (
-                                        <span className="tabular-nums text-xs font-bold text-red-700">
-                                          (مرجوعی: {formatWeight(item.returnedWeight)})
-                                        </span>
-                                      )}
-                                      {inProduction && (
-                                        <button
-                                          type="button"
-                                          onClick={() => onOpenWeight(order, item)}
-                                          title="ویرایش وزن"
-                                          className="no-print text-slate-400 hover:text-[#0f5864] p-1 rounded transition-colors"
-                                        >
-                                          <Edit3 className="w-3.5 h-3.5" />
-                                        </button>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      disabled={!inProduction}
-                                      onClick={() => onOpenWeight(order, item)}
-                                      className="no-print px-3 py-1.5 text-xs font-medium rounded border transition-colors bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-700 hover:text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed whitespace-nowrap"
-                                    >
-                                      ثبت وزن محصول
-                                    </button>
-                                  )}
-                                </td>
-                              </tr>
-                            );
-                          })}
+                        <tbody className="divide-y divide-slate-100">
+                          {order.items.map((item) => (
+                            <tr key={item.id}>
+                              <td className="px-5 py-2 font-medium">{item.productName}</td>
+                              <td className="tabular-nums px-5 py-2">
+                                {formatWeight(item.requestedWeight)}
+                              </td>
+                              <td className="tabular-nums px-5 py-2">
+                                {item.producedWeight !== null
+                                  ? formatWeight(item.producedWeight)
+                                  : 'ثبت نشده'}
+                              </td>
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
-
-                    {/* Return Resolution & Confirmation Box */}
-                    {returned && order.returnRecord && (
-                      <ReturnResolutionBox
-                        returnRecord={order.returnRecord}
-                        currentDept="production"
-                        onConfirmReturn={() => onConfirmReturn(order.id)}
-                      />
-                    )}
                   </article>
                 </React.Fragment>
               );
@@ -579,7 +471,13 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                               {alloc.deliverySlot}
                             </td>
                             <td className="tabular-nums px-4 py-3.5 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap">
-                              {alloc.orderCode}
+                              <button
+                                type="button"
+                                onClick={() => onSelectOrder(alloc.orderId)}
+                                className="hover:underline text-[#0056b3] font-bold"
+                              >
+                                {alloc.orderCode}
+                              </button>
                             </td>
                           </React.Fragment>
                         );

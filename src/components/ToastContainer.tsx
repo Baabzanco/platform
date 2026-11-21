@@ -64,7 +64,7 @@ export const ToastContainer: React.FC<ToastContainerProps> = ({
   return (
     <div
       aria-live="polite"
-      className="no-print fixed bottom-5 left-5 z-50 flex flex-col gap-2.5 w-[370px] max-w-[calc(100vw-2rem)]"
+      className="no-print fixed bottom-5 left-5 z-[60] flex flex-col gap-2.5 w-[370px] max-w-[calc(100vw-2rem)]"
     >
       {toasts.map((toast) => {
         const style = STYLE_MAP[toast.type];
