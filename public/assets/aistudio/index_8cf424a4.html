@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مدیریت سفارشات (تولید، مالی، ارسال)</title>
+    
+    <link href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css" rel="stylesheet" type="text/css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --bg-color: #f2f4f7;
+            --card-bg: #ffffff;
+            --text-main: #333;
+            --text-muted: #888;
+            --primary-color: #0f5864;
+            --border-color: #e0e4e8;
+            --light-blue: #e8f0fe;
+            --light-green: #e6f4ea;
+            --warning-bg: #fff8e1;
+            --warning-text: #b78103;
+            --warning-border: #ffeeba;
+            --danger-color: #dc3545;
+            --danger-bg: #f8d7da;
+            --danger-text: #721c24;
+            --font-family: 'Vazirmatn', sans-serif;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: var(--font-family); }
+
+        body { background-color: var(--bg-color); color: var(--text-main); height: 100vh; overflow: hidden; }
+
+        /* Layout */
+        .app-container { display: flex; height: 100%; }
+
+        /* Sidebar Right */
+        .sidebar-right {
+            width: 70px; background-color: #fff; border-left: 1px solid var(--border-color);
+            display: flex; flex-direction: column; align-items: center; padding: 15px 0; z-index: 10;
+        }
+
+        .user-profile { display: flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--text-muted); margin-bottom: 20px; }
+        .user-profile i { font-size: 28px; color: #999; margin-bottom: 5px; }
+
+        .menu-icons { list-style: none; display: flex; flex-direction: column; gap: 20px; width: 100%; align-items: center; }
+
+        .menu-icons li {
+            position: relative;
+            font-size: 20px; color: #777; cursor: pointer; width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: 0.2s;
+        }
+
+        .menu-icons li:hover { background-color: #f0f0f0; }
+        .menu-icons li.active { background-color: var(--primary-color); color: #fff; }
+        .menu-icons li.logout { margin-top: auto; color: #d9534f; }
+
+        /* نشانگر نوتیفیکیشن روی آیکون منو */
+        .nav-notif-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background-color: var(--danger-color);
+            color: #fff;
+            font-size: 10px;
+            font-weight: bold;
+            min-width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #fff;
+            animation: bounceBadge 0.4s ease;
+        }
+        @keyframes bounceBadge {
+            0% { transform: scale(0); }
+            70% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        /* Main Content */
+        .main-content { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; position: relative; }
+
+        /* Pages setup */
+        .page { display: none; flex-direction: column; gap: 15px; width: 100%; animation: fadeIn 0.3s ease-in-out; }
+        .page.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Top Header */
+        .top-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; flex-wrap: wrap; gap: 10px; }
+        .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-muted); }
+
+        /* دکمه‌های پرینت */
+        .btn-print-all {
+            background-color: #fff;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+            padding: 7px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            transition: 0.2s;
+        }
+        .btn-print-all:hover { background-color: var(--primary-color); color: #fff; }
+
+        .btn-print-single {
+            background-color: #fff;
+            color: #555;
+            border: 1px solid #ccc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: 0.2s;
+        }
+        .btn-print-single:hover { background-color: #f0f0f0; color: #222; border-color: #999; }
+
+        /* --- استایل تب‌های داخلی صفحه تولید --- */
+        .prod-tabs {
+            display: flex;
+            gap: 10px;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 5px;
+        }
+        .prod-tab-btn {
+            background: none;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            color: var(--text-muted);
+            cursor: pointer;
+            position: relative;
+            transition: 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .prod-tab-btn:hover { color: var(--primary-color); }
+        .prod-tab-btn.active { color: var(--primary-color); }
+        .prod-tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--primary-color);
+        }
+        .prod-tab-content {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+        .prod-tab-content.active { display: flex; }
+
+        /* --- استایل جدول نیاز به آماده‌سازی --- */
+        .prep-card {
+            background: #fff;
+            border: 1px solid #7a9cbf;
+            border-radius: 8px;
+            overflow-x: auto;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        }
+        .prep-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: center;
+        }
+        .prep-table th {
+            background-color: #f8fafc;
+            color: var(--primary-color);
+            font-weight: bold;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            border-left: 1px solid #f0f0f0;
+            white-space: nowrap;
+        }
+        .prep-table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            border-left: 1px solid #f0f0f0;
+            color: var(--text-main);
+        }
+        .prep-table th:first-child,
+        .prep-table td:first-child {
+            text-align: right;
+            font-weight: bold;
+        }
+        .prep-table tr:last-child td { border-bottom: none; }
+        .prep-table tbody tr:hover { background-color: #f9fbfd; }
+        .prep-total-col {
+            background-color: var(--light-green);
+            color: #1e7e34 !important;
+            font-weight: bold;
+        }
+        .prep-code-badge {
+            background-color: var(--light-blue);
+            color: #0056b3;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        /* Orders List */
+        .orders-list { display: flex; flex-direction: column; gap: 15px; }
+
+        .order-card {
+            background: #fff; border: 1px solid #7a9cbf; border-radius: 8px;
+            overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.02); transition: 0.3s;
+        }
+
+        .order-card.completed { opacity: 0.85; border-color: #28a745; background-color: #f8fff9; }
+        .order-card.completed .order-header { background-color: #e6f4ea; }
+
+        .order-card.discrepancy { border-color: #f59e0b !important; background-color: #fffdf7 !important; }
+        .order-card.discrepancy .finance-header { background-color: #fef3c7 !important; }
+
+        .order-card.rejected { border-color: var(--danger-color) !important; background-color: #fffafa !important; opacity: 1 !important; }
+        .order-card.rejected .order-header,
+        .order-card.rejected .finance-header,
+        .order-card.rejected .shipping-header { background-color: var(--danger-bg) !important; }
+        .order-card.rejected .header-item .value.bold,
+        .order-card.rejected .detail-item .value.bold { color: var(--danger-color) !important; }
+        .order-card.rejected .order-table { opacity: 0.6; pointer-events: none; }
+
+        .rejected-alert {
+            display: none; padding: 12px 20px; background-color: var(--danger-bg); color: var(--danger-text);
+            font-size: 13px; border-bottom: 1px solid var(--danger-color); align-items: center; gap: 10px;
+        }
+
+        /* نوار هشدار مغایرت وزن در کارت مالی */
+        .discrepancy-alert {
+            display: none; padding: 12px 20px; background-color: var(--warning-bg); color: var(--warning-text);
+            font-size: 13px; border-bottom: 1px solid #f59e0b; align-items: center; gap: 10px;
+        }
+
+        .order-header {
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+            padding: 12px 20px; background-color: #f8fafc; border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-info { display: flex; gap: 40px; }
+        .header-item { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+        .header-item .label { color: var(--text-muted); }
+        .header-item .value { color: var(--text-main); }
+        .header-item .value.bold { font-weight: bold; color: #0056b3; }
+
+        .header-right-group { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .production-actions { display: flex; gap: 10px; }
+
+        .btn-approve, .btn-reject {
+            padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: var(--font-family); font-size: 13px; display: flex; align-items: center; gap: 5px; transition: 0.2s;
+        }
+        .btn-approve { background-color: #e6f4ea; color: #1e7e34; border: 1px solid #c3e6cb; }
+        .btn-approve:hover { background-color: #1e7e34; color: #fff; }
+        .btn-reject { background-color: var(--danger-bg); color: var(--danger-text); border: 1px solid #f5c6cb; }
+        .btn-reject:hover { background-color: var(--danger-color); color: #fff; }
+        .btn-reject:disabled { background-color: #f0f0f0; color: #aaa; border-color: #ddd; cursor: not-allowed; }
+
+        .order-notes { padding: 12px 20px; background-color: var(--warning-bg); color: var(--warning-text); font-size: 13px; border-bottom: 1px solid var(--border-color); }
+
+        /* Table */
+        .order-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .order-table th { text-align: right; padding: 12px 20px; color: var(--text-muted); font-weight: normal; background-color: #fff; border-bottom: 1px solid var(--border-color); }
+        .order-table td { padding: 12px 20px; border-bottom: 1px solid #f0f0f0; color: var(--text-main); }
+        .order-table tr:last-child td { border-bottom: none; }
+
+        .old-weight-strike {
+            text-decoration: line-through;
+            color: var(--danger-color);
+            font-size: 11px;
+            margin-left: 6px;
+        }
+        .new-weight-highlight {
+            color: #b78103;
+            font-weight: bold;
+            background: #fff8e1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #ffeeba;
+        }
+
+        .btn-ready {
+            background-color: var(--light-green); color: #1e7e34; border: 1px solid #c3e6cb; padding: 6px 12px; border-radius: 4px; font-family: var(--font-family); font-size: 12px; cursor: pointer; transition: 0.2s;
+        }
+        .btn-ready:hover { background-color: #1e7e34; color: #fff; }
+        .btn-ready:disabled { background-color: #f0f0f0; color: #aaa; border-color: #ddd; cursor: not-allowed; }
+
+        .status-delivered { display: inline-flex; align-items: center; gap: 5px; background-color: #e6f4ea; color: #1e7e34; padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid #c3e6cb; }
+
+        .btn-complete-order {
+            background-color: #28a745; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: var(--font-family); font-size: 13px; cursor: pointer; display: none; align-items: center; gap: 8px; animation: pulse 2s infinite;
+        }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); } 100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); } }
+
+        /* --- استایل‌های مشترک مالی و ارسال --- */
+        .finance-header, .shipping-header { padding: 15px 20px; background-color: #eef2f9; border-bottom: 1px solid var(--border-color); }
+        .finance-header-top, .shipping-header-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; margin-bottom: 10px; }
+        .finance-details-grid, .shipping-details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; flex: 1; }
+        .detail-item { font-size: 13px; }
+        .detail-item .label { color: var(--text-muted); display: block; margin-bottom: 5px; font-size: 12px; }
+        .detail-item .value { font-weight: bold; color: var(--text-main); }
+        .address-box { margin-top: 10px; padding: 10px; background: #fff; border: 1px dashed var(--border-color); border-radius: 6px; font-size: 13px; }
+
+        /* --- استایل‌های صفحه مالی --- */
+        .contact-section { display: flex; align-items: center; gap: 15px; background: #fff; padding: 10px 15px; border-radius: 8px; border: 1px solid var(--border-color); width: 100%; }
+        .btn-call { background-color: #007bff; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-family: var(--font-family); display: flex; align-items: center; gap: 8px; font-size: 13px; }
+        .audio-player { display: flex; align-items: center; gap: 10px; background: #f8f9fa; padding: 5px 15px; border-radius: 20px; border: 1px solid #ddd; flex: 1; max-width: 300px; }
+        .audio-player audio { width: 100%; height: 30px; outline: none; }
+        
+        .finance-footer { padding: 15px 20px; background: #f8fafc; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .btn-finance-approve { background-color: var(--primary-color); color: #fff; border: none; padding: 9px 18px; border-radius: 6px; font-family: var(--font-family); font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: 0.2s; }
+        .btn-finance-approve:disabled { background-color: #ccc; cursor: not-allowed; }
+        .finance-approved-badge { display: none; background-color: #e6f4ea; color: #1e7e34; border: 1px solid #c3e6cb; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: bold; align-items: center; gap: 8px; }
+        .finance-rejected-badge { display: none; background-color: var(--danger-bg); color: var(--danger-text); border: 1px solid #f5c6cb; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: bold; align-items: center; gap: 8px; }
+
+        /* --- استایل‌های صفحه ارسال --- */
+        .shipping-actions { padding: 15px 20px; background: #f8fafc; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+        .shipping-btns-group { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .driver-select { padding: 8px; border: 1px solid var(--border-color); border-radius: 6px; font-family: var(--font-family); font-size: 13px; outline: none; }
+        .btn-ship { background-color: var(--primary-color); color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-family: var(--font-family); font-size: 13px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+        .btn-ship:hover { background-color: #0a3c44; }
+        
+        .btn-refer-finance {
+            background-color: var(--warning-bg);
+            color: var(--warning-text);
+            border: 1px solid #f59e0b;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-family: var(--font-family);
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-refer-finance:hover {
+            background-color: #f59e0b;
+            color: #fff;
+        }
+
+        .shipping-locked {
+            display: none; padding: 15px 20px; background-color: #fff3cd; color: #856404;
+            border-top: 1px solid #ffeeba; font-size: 13px; align-items: center; gap: 10px; font-weight: bold;
+        }
+        .shipping-locked.rejected-lock {
+            background-color: var(--danger-bg);
+            color: var(--danger-text);
+            border-top-color: #f5c6cb;
+        }
+
+        /* نوار وضعیت تحویل موفق و دکمه مرجوعی */
+        .shipping-delivered-bar {
+            display: none;
+            padding: 15px 20px;
+            background-color: #e6f4ea;
+            border-top: 1px solid #c3e6cb;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .delivered-msg {
+            color: #1e7e34;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .btn-return-order {
+            background-color: #fff;
+            color: var(--danger-color);
+            border: 1px solid var(--danger-color);
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: 0.2s;
+        }
+        .btn-return-order:hover { background-color: var(--danger-color); color: #fff; }
+        .btn-return-order:disabled { opacity: 0.5; cursor: not-allowed; background-color: #f8f9fa; color: #888; border-color: #ccc; }
+
+        /* باکس نمایش اطلاعات مرجوعی ثبت‌شده در کارت */
+        .return-summary-box {
+            display: none;
+            padding: 15px 20px;
+            background-color: #fff5f5;
+            border-top: 1px solid #f5c6cb;
+            color: var(--danger-text);
+            font-size: 13px;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .return-summary-box ul { margin-right: 20px; margin-top: 4px; }
+
+        /* Modal (Popup) Styles */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; opacity: 0; visibility: hidden; transition: 0.3s; }
+        .modal-overlay.show { opacity: 1; visibility: visible; }
+        .modal-content { background: #fff; width: 480px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); transform: translateY(-20px); transition: 0.3s; max-height: 90vh; overflow-y: auto; }
+        .modal-overlay.show .modal-content { transform: translateY(0); }
+        .modal-header { padding: 15px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { font-size: 15px; margin: 0; }
+        .modal-header.danger h3 { color: var(--danger-color); }
+        .modal-header.warning h3 { color: #b78103; }
+        .close-btn { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); }
+        .modal-body { padding: 20px; }
+        .modal-product-name { font-size: 14px; margin-bottom: 15px; font-weight: bold; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px; }
+        .input-group label { font-size: 13px; color: var(--text-muted); }
+        .input-group input, .input-group textarea, .input-group select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; outline: none; font-family: var(--font-family); }
+        .modal-footer { padding: 15px 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
+        .btn-danger { background-color: var(--danger-color); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: var(--font-family); font-size: 13px; cursor: pointer; }
+        .btn-warning { background-color: #f59e0b; color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-family: var(--font-family); font-size: 13px; font-weight: bold; cursor: pointer; }
+        .btn-outline { background: #fff; border: 1px solid var(--border-color); padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .btn-primary { background: var(--primary-color); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        
+        .delivery-row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; justify-content: space-between; background: #f8fafc; padding: 8px 12px; border-radius: 6px; border: 1px solid #eee; }
+        .delivery-row span { font-size: 13px; font-weight: bold; }
+        .delivery-row small { color: var(--text-muted); font-size: 11px; display: block; font-weight: normal; }
+        .delivery-row input { width: 120px; padding: 7px; border: 1px solid var(--border-color); border-radius: 5px; outline: none; }
+
+        /* ================= پاپ‌آپ اعلان (Toast Notification) ================= */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 380px;
+            width: 90%;
+        }
+        .toast-popup {
+            background: #fff;
+            border-right: 5px solid var(--danger-color);
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+            padding: 15px 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            animation: slideInLeft 0.35s ease-out;
+            position: relative;
+        }
+        .toast-popup.warning-toast {
+            border-right-color: #f59e0b;
+        }
+        @keyframes slideInLeft {
+            from { opacity: 0; transform: translateX(-40px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .toast-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--danger-color);
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .toast-popup.warning-toast .toast-header {
+            color: #b78103;
+        }
+        .toast-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: #888;
+            cursor: pointer;
+            line-height: 1;
+        }
+        .toast-body {
+            font-size: 13px;
+            color: var(--text-main);
+            line-height: 1.6;
+        }
+        .toast-tag {
+            display: inline-block;
+            background: var(--danger-bg);
+            color: var(--danger-text);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-top: 2px;
+        }
+        .toast-popup.warning-toast .toast-tag {
+            background: var(--warning-bg);
+            color: var(--warning-text);
+        }
+
+        /* ================= استایل‌های اختصاصی پرینت ================= */
+        @media print {
+            body {
+                background: #fff !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            .sidebar-right,
+            .top-header,
+            .prod-tabs,
+            .btn-print-single,
+            .btn-print-all,
+            .production-actions,
+            .btn-complete-order,
+            .btn-ready,
+            .contact-section,
+            .finance-footer,
+            .shipping-actions,
+            .btn-return-order,
+            .modal-overlay,
+            .toast-container {
+                display: none !important;
+            }
+            .app-container { display: block !important; height: auto !important; }
+            .main-content { padding: 0 !important; overflow: visible !important; }
+            .page:not(.active) { display: none !important; }
+            .page.active { display: block !important; }
+            .order-card {
+                border: 1px solid #333 !important;
+                box-shadow: none !important;
+                margin-bottom: 20px !important;
+                page-break-inside: avoid;
+                opacity: 1 !important;
+            }
+            body.printing-single .order-card:not(.print-target),
+            body.printing-single .prep-card {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <aside class="sidebar-right">
+            <div class="user-profile">
+                <i class="fa-solid fa-user-circle"></i>
+                <span>امیر مرادصالحی</span>
+            </div>
+            <ul class="menu-icons">
+                <li id="menu-production" class="active" onclick="switchPage('production')" title="بخش تولید">
+                    <i class="fa-solid fa-industry"></i>
+                    <span class="nav-notif-badge" id="badge-production">0</span>
+                </li>
+                <li id="menu-finance" onclick="switchPage('finance')" title="بخش مالی">
+                    <i class="fa-solid fa-file-invoice-dollar"></i>
+                    <span class="nav-notif-badge" id="badge-finance">0</span>
+                </li>
+                <li id="menu-shipping" onclick="switchPage('shipping')" title="بخش ارسال">
+                    <i class="fa-solid fa-truck-fast"></i>
+                    <span class="nav-notif-badge" id="badge-shipping">0</span>
+                </li>
+                <li><i class="fa-solid fa-chart-pie"></i></li>
+                <li class="logout"><i class="fa-solid fa-arrow-right-from-bracket"></i></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            
+            <!-- ================= صفحه تولید ================= -->
+            <div id="page-production" class="page active">
+                <header class="top-header">
+                    <div class="breadcrumb"><span>داشبورد مدیریت</span><i class="fa-solid fa-chevron-left"></i><span>بخش تولید</span></div>
+                    <button class="btn-print-all" onclick="printAllOrders()"><i class="fa-solid fa-print"></i> پرینت تمامی سفارشات</button>
+                </header>
+
+                <!-- نوار تب‌های صفحه تولید -->
+                <div class="prod-tabs">
+                    <button class="prod-tab-btn active" id="tab-btn-orders" onclick="switchProdTab('orders')">
+                        <i class="fa-solid fa-list-check"></i> لیست سفارشات
+                    </button>
+                    <button class="prod-tab-btn" id="tab-btn-prep" onclick="switchProdTab('prep')">
+                        <i class="fa-solid fa-boxes-packing"></i> نیاز به آماده سازی
+                    </button>
+                </div>
+
+                <!-- محتوای تب 1: لیست سفارشات -->
+                <div id="prod-tab-orders" class="prod-tab-content active">
+                    <div class="orders-list">
+                        <!-- کارت تولید 1 -->
+                        <div class="order-card" id="prod-order-1">
+                            <div class="order-header">
+                                <div class="header-info">
+                                    <div class="header-item"><span class="label">کد سفارش</span><span class="value bold">39138</span></div>
+                                    <div class="header-item"><span class="label">بازه ارسال</span><span class="value">۱۶ تا -</span></div>
+                                </div>
+                                <div class="header-right-group">
+                                    <button class="btn-print-single" onclick="printSingleOrder('prod-order-1')"><i class="fa-solid fa-print"></i> پرینت</button>
+                                    <div class="production-actions" id="actions-1">
+                                        <button class="btn-approve" onclick="approveOrder('prod-order-1', '1')"><i class="fa-solid fa-check"></i> تایید سفارش</button>
+                                        <button class="btn-reject" onclick="openRejectModal('prod-order-1', 'production')"><i class="fa-solid fa-xmark"></i> رد سفارش</button>
+                                    </div>
+                                    <button class="btn-complete-order" onclick="completeProduction('prod-order-1', '1')"><i class="fa-solid fa-check-double"></i> اتمام تولید و ارسال به مالی</button>
+                                </div>
+                            </div>
+                            <div class="rejected-alert" id="reject-alert-1">
+                                <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                            </div>
+                            <div class="order-notes"><strong>توضیحات:</strong> لطفا بار سرخ تر ارسال شود بار تازه کشتار و سرخ و تمیز باشد</div>
+                            <table class="order-table">
+                                <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>وضعیت / اقدام</th></tr></thead>
+                                <tbody>
+                                    <tr class="product-row"><td>خرده بدن بره</td><td>kg 30</td><td class="action-cell"><button class="btn-ready" disabled onclick="openWeightModal(this, 'خرده بدن بره', 'prod-order-1')">ثبت وزن محصول</button></td></tr>
+                                    <tr class="product-row"><td>راسته بره</td><td>kg 15</td><td class="action-cell"><button class="btn-ready" disabled onclick="openWeightModal(this, 'راسته بره', 'prod-order-1')">ثبت وزن محصول</button></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- کارت تولید 2 -->
+                        <div class="order-card" id="prod-order-2">
+                            <div class="order-header">
+                                <div class="header-info">
+                                    <div class="header-item"><span class="label">کد سفارش</span><span class="value bold">39161</span></div>
+                                    <div class="header-item"><span class="label">بازه ارسال</span><span class="value">۱۴ تا -</span></div>
+                                </div>
+                                <div class="header-right-group">
+                                    <button class="btn-print-single" onclick="printSingleOrder('prod-order-2')"><i class="fa-solid fa-print"></i> پرینت</button>
+                                    <div class="production-actions" id="actions-2">
+                                        <button class="btn-approve" onclick="approveOrder('prod-order-2', '2')"><i class="fa-solid fa-check"></i> تایید سفارش</button>
+                                        <button class="btn-reject" onclick="openRejectModal('prod-order-2', 'production')"><i class="fa-solid fa-xmark"></i> رد سفارش</button>
+                                    </div>
+                                    <button class="btn-complete-order" onclick="completeProduction('prod-order-2', '2')"><i class="fa-solid fa-check-double"></i> اتمام تولید و ارسال به مالی</button>
+                                </div>
+                            </div>
+                            <div class="rejected-alert" id="reject-alert-2">
+                                <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                            </div>
+                            <div class="order-notes"><strong>توضیحات:</strong> با ماشین یخچالدار ارسال شود تاکید کرد دقیقا همین مقدار ارسال شود تازه و با کیفیت باشد.</div>
+                            <table class="order-table">
+                                <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>وضعیت / اقدام</th></tr></thead>
+                                <tbody>
+                                    <tr class="product-row"><td>قلوه گاه تکر بره</td><td>kg 13</td><td class="action-cell"><button class="btn-ready" disabled onclick="openWeightModal(this, 'قلوه گاه تکر بره', 'prod-order-2')">ثبت وزن محصول</button></td></tr>
+                                    <tr class="product-row"><td>سردست بدون گردن ممتاز</td><td>kg 24</td><td class="action-cell"><button class="btn-ready" disabled onclick="openWeightModal(this, 'سردست بدون گردن ممتاز', 'prod-order-2')">ثبت وزن محصول</button></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- کارت تولید 3 -->
+                        <div class="order-card" id="prod-order-3">
+                            <div class="order-header">
+                                <div class="header-info">
+                                    <div class="header-item"><span class="label">کد سفارش</span><span class="value bold">39175</span></div>
+                                    <div class="header-item"><span class="label">بازه ارسال</span><span class="value">۱۵ تا -</span></div>
+                                </div>
+                                <div class="header-right-group">
+                                    <button class="btn-print-single" onclick="printSingleOrder('prod-order-3')"><i class="fa-solid fa-print"></i> پرینت</button>
+                                    <div class="production-actions" id="actions-3">
+                                        <button class="btn-approve" onclick="approveOrder('prod-order-3', '3')"><i class="fa-solid fa-check"></i> تایید سفارش</button>
+                                        <button class="btn-reject" onclick="openRejectModal('prod-order-3', 'production')"><i class="fa-solid fa-xmark"></i> رد سفارش</button>
+                                    </div>
+                                    <button class="btn-complete-order" onclick="completeProduction('prod-order-3', '3')"><i class="fa-solid fa-check-double"></i> اتمام تولید و ارسال به مالی</button>
+                                </div>
+                            </div>
+                            <div class="rejected-alert" id="reject-alert-3">
+                                <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                            </div>
+                            <div class="order-notes"><strong>توضیحات:</strong> ارسال بار تازه و درجه یک الزامی است. فاکتور رسمی صادر شود.</div>
+                            <table class="order-table">
+                                <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>وضعیت / اقدام</th></tr></thead>
+                                <tbody>
+                                    <tr class="product-row"><td>ماهیچه گوسفندی</td><td>kg 8</td><td class="action-cell"><button class="btn-ready" disabled onclick="openWeightModal(this, 'ماهیچه گوسفندی', 'prod-order-3')">ثبت وزن محصول</button></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- محتوای تب 2: نیاز به آماده سازی -->
+                <div id="prod-tab-prep" class="prod-tab-content">
+                    <div class="prep-card">
+                        <table class="prep-table">
+                            <thead>
+                                <tr>
+                                    <th>نام محصول</th>
+                                    <th>وزن</th>
+                                    <th>بازه</th>
+                                    <th>کد</th>
+                                    <th>وزن</th>
+                                    <th>بازه</th>
+                                    <th>کد</th>
+                                    <th class="prep-total-col">مجموع</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ران معمولی</td>
+                                    <td>40</td>
+                                    <td>1-3</td>
+                                    <td><span class="prep-code-badge">115</span></td>
+                                    <td>35</td>
+                                    <td>2-4</td>
+                                    <td><span class="prep-code-badge">205</span></td>
+                                    <td class="prep-total-col">75</td>
+                                </tr>
+                                <tr>
+                                    <td>خورشتی ران</td>
+                                    <td>15</td>
+                                    <td>11-1</td>
+                                    <td><span class="prep-code-badge">120</span></td>
+                                    <td>20</td>
+                                    <td>12-1</td>
+                                    <td><span class="prep-code-badge">209</span></td>
+                                    <td class="prep-total-col">35</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= صفحه مالی ================= -->
+            <div id="page-finance" class="page">
+                <header class="top-header">
+                    <div class="breadcrumb"><span>داشبورد مدیریت</span><i class="fa-solid fa-chevron-left"></i><span>بخش مالی</span></div>
+                    <button class="btn-print-all" onclick="printAllOrders()"><i class="fa-solid fa-print"></i> پرینت تمامی سفارشات</button>
+                </header>
+
+                <div class="orders-list">
+                    <!-- کارت مالی 1 -->
+                    <div class="order-card" id="finance-order-1">
+                        <div class="finance-header">
+                            <div class="finance-header-top">
+                                <div class="finance-details-grid">
+                                    <div class="detail-item"><span class="label">کد سفارش</span><span class="value bold">39138</span></div>
+                                    <div class="detail-item"><span class="label">طرف حساب</span><span class="value">کتیرنگ شاهان / آقای گودرزی</span></div>
+                                    <div class="detail-item"><span class="label">وضعیت مالی</span><span class="value" id="finance-status-1" style="color: #888;">در انتظار تولید</span></div>
+                                </div>
+                                <button class="btn-print-single" onclick="printSingleOrder('finance-order-1')"><i class="fa-solid fa-print"></i> پرینت</button>
+                            </div>
+                            <div class="contact-section">
+                                <button class="btn-call"><i class="fa-solid fa-phone"></i> تماس با مشتری</button>
+                                <div class="audio-player"><i class="fa-solid fa-microphone"></i><audio controls><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg"></audio></div>
+                            </div>
+                        </div>
+                        <div class="rejected-alert" id="finance-reject-alert-1">
+                            <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                        </div>
+                        <div class="discrepancy-alert" id="finance-discrepancy-alert-1">
+                            <i class="fa-solid fa-scale-unbalanced"></i><span class="discrepancy-alert-msg"></span>
+                        </div>
+                        <table class="order-table" id="finance-table-1">
+                            <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>مقدار تحویل شده (تولید / اصلاحی)</th><th>قیمت واحد (ریال)</th></tr></thead>
+                            <tbody>
+                                <tr><td>خرده بدن بره</td><td>30 kg</td><td>29.5 kg</td><td>9,200,000</td></tr>
+                                <tr><td>راسته بره</td><td>15 kg</td><td>15 kg</td><td>10,500,000</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="finance-footer">
+                            <div class="finance-approved-badge" id="finance-badge-1"><i class="fa-solid fa-check-circle"></i> تایید شده - ارسال به بخش ارسال</div>
+                            <div class="finance-rejected-badge" id="finance-rejected-badge-1"><i class="fa-solid fa-ban"></i> سفارش رد شده است</div>
+                            <button class="btn-reject" id="finance-reject-btn-1" disabled onclick="openRejectModal('finance-order-1', 'finance')"><i class="fa-solid fa-xmark"></i> رد سفارش</button>
+                            <button class="btn-finance-approve" id="finance-btn-1" disabled onclick="approveFinance('finance-order-1', 'finance-btn-1', 'finance-badge-1', '1')"><i class="fa-solid fa-lock"></i> در انتظار اتمام تولید...</button>
+                        </div>
+                    </div>
+
+                    <!-- کارت مالی 2 -->
+                    <div class="order-card" id="finance-order-2">
+                        <div class="finance-header">
+                            <div class="finance-header-top">
+                                <div class="finance-details-grid">
+                                    <div class="detail-item"><span class="label">کد سفارش</span><span class="value bold">39161</span></div>
+                                    <div class="detail-item"><span class="label">طرف حساب</span><span class="value">صنایع شیمیایی غفاری / آقای عباسی</span></div>
+                                    <div class="detail-item"><span class="label">وضعیت مالی</span><span class="value" id="finance-status-2" style="color: #888;">در انتظار تولید</span></div>
+                                </div>
+                                <button class="btn-print-single" onclick="printSingleOrder('finance-order-2')"><i class="fa-solid fa-print"></i> پرینت</button>
+                            </div>
+                            <div class="contact-section">
+                                <button class="btn-call"><i class="fa-solid fa-phone"></i> تماس با مشتری</button>
+                                <div class="audio-player"><i class="fa-solid fa-microphone"></i><audio controls><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3" type="audio/mpeg"></audio></div>
+                            </div>
+                        </div>
+                        <div class="rejected-alert" id="finance-reject-alert-2">
+                            <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                        </div>
+                        <div class="discrepancy-alert" id="finance-discrepancy-alert-2">
+                            <i class="fa-solid fa-scale-unbalanced"></i><span class="discrepancy-alert-msg"></span>
+                        </div>
+                        <table class="order-table" id="finance-table-2">
+                            <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>مقدار تحویل شده (تولید / اصلاحی)</th><th>قیمت واحد (ریال)</th></tr></thead>
+                            <tbody>
+                                <tr><td>قلوه گاه تکر بره</td><td>13 kg</td><td>13 kg</td><td>14,500,000</td></tr>
+                                <tr><td>سردست بدون گردن ممتاز</td><td>24 kg</td><td>24 kg</td><td>18,600,000</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="finance-footer">
+                            <div class="finance-approved-badge" id="finance-badge-2"><i class="fa-solid fa-check-circle"></i> تایید شده - ارسال به بخش ارسال</div>
+                            <div class="finance-rejected-badge" id="finance-rejected-badge-2"><i class="fa-solid fa-ban"></i> سفارش رد شده است</div>
+                            <button class="btn-reject" id="finance-reject-btn-2" disabled onclick="openRejectModal('finance-order-2', 'finance')"><i class="fa-solid fa-xmark"></i> رد سفارش</button>
+                            <button class="btn-finance-approve" id="finance-btn-2" disabled onclick="approveFinance('finance-order-2', 'finance-btn-2', 'finance-badge-2', '2')"><i class="fa-solid fa-lock"></i> در انتظار اتمام تولید...</button>
+                        </div>
+                    </div>
+
+                    <!-- کارت مالی 3 -->
+                    <div class="order-card" id="finance-order-3">
+                        <div class="finance-header">
+                            <div class="finance-header-top">
+                                <div class="finance-details-grid">
+                                    <div class="detail-item"><span class="label">کد سفارش</span><span class="value bold">39175</span></div>
+                                    <div class="detail-item"><span class="label">طرف حساب</span><span class="value">رستوران سنتی الوند / آقای صادقی</span></div>
+                                    <div class="detail-item"><span class="label">وضعیت مالی</span><span class="value" id="finance-status-3" style="color: #888;">در انتظار تولید</span></div>
+                                </div>
+                                <button class="btn-print-single" onclick="printSingleOrder('finance-order-3')"><i class="fa-solid fa-print"></i> پرینت</button>
+                            </div>
+                            <div class="contact-section">
+                                <button class="btn-call"><i class="fa-solid fa-phone"></i> تماس با مشتری</button>
+                                <div class="audio-player"><i class="fa-solid fa-microphone"></i><audio controls><source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3" type="audio/mpeg"></audio></div>
+                            </div>
+                        </div>
+                        <div class="rejected-alert" id="finance-reject-alert-3">
+                            <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                        </div>
+                        <div class="discrepancy-alert" id="finance-discrepancy-alert-3">
+                            <i class="fa-solid fa-scale-unbalanced"></i><span class="discrepancy-alert-msg"></span>
+                        </div>
+                        <table class="order-table" id="finance-table-3">
+                            <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>مقدار تحویل شده (تولید / اصلاحی)</th><th>قیمت واحد (ریال)</th></tr></thead>
+                            <tbody>
+                                <tr><td>ماهیچه گوسفندی</td><td>8 kg</td><td>8 kg</td><td>22,000,000</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="finance-footer">
+                            <div class="finance-approved-badge" id="finance-badge-3"><i class="fa-solid fa-check-circle"></i> تایید شده - ارسال به بخش ارسال</div>
+                            <div class="finance-rejected-badge" id="finance-rejected-badge-3"><i class="fa-solid fa-ban"></i> سفارش رد شده است</div>
+                            <button class="btn-reject" id="finance-reject-btn-3" disabled onclick="openRejectModal('finance-order-3', 'finance')"><i class="fa-solid fa-xmark"></i> رد سفارش</button>
+                            <button class="btn-finance-approve" id="finance-btn-3" disabled onclick="approveFinance('finance-order-3', 'finance-btn-3', 'finance-badge-3', '3')"><i class="fa-solid fa-lock"></i> در انتظار اتمام تولید...</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ================= صفحه ارسال ================= -->
+            <div id="page-shipping" class="page">
+                <header class="top-header">
+                    <div class="breadcrumb"><span>داشبورد مدیریت</span><i class="fa-solid fa-chevron-left"></i><span>بخش ارسال</span></div>
+                    <button class="btn-print-all" onclick="printAllOrders()"><i class="fa-solid fa-print"></i> پرینت تمامی سفارشات</button>
+                </header>
+
+                <div class="orders-list">
+                    <!-- کارت ارسال 1 -->
+                    <div class="order-card" id="ship-order-1">
+                        <div class="shipping-header">
+                            <div class="shipping-header-top">
+                                <div class="shipping-details-grid">
+                                    <div class="detail-item"><span class="label">کد سفارش</span><span class="value bold">39138</span></div>
+                                    <div class="detail-item"><span class="label">طرف حساب</span><span class="value">کتیرنگ شاهان / آقای گودرزی</span></div>
+                                </div>
+                                <button class="btn-print-single" onclick="printSingleOrder('ship-order-1')"><i class="fa-solid fa-print"></i> پرینت</button>
+                            </div>
+                            <div class="address-box"><i class="fa-solid fa-location-dot" style="color: var(--danger-color); margin-left: 5px;"></i><strong>آدرس مشتری:</strong> تهران، بزرگراه فتح، کنار گذر متوسلیان، انبار مرکزی کتیرنگ شاهان</div>
+                        </div>
+                        <div class="rejected-alert" id="ship-reject-alert-1">
+                            <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                        </div>
+                        <table class="order-table" id="ship-table-1">
+                            <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>مقدار تحویل شده (تولید / واقعی)</th></tr></thead>
+                            <tbody>
+                                <tr><td>خرده بدن بره</td><td>30 kg</td><td>29.5 kg</td></tr>
+                                <tr><td>راسته بره</td><td>15 kg</td><td>15 kg</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="shipping-locked" id="ship-locked-1" style="display: flex;"><i class="fa-solid fa-lock"></i> این سفارش در انتظار تایید نهایی توسط واحد مالی است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.</div>
+                        <div class="shipping-actions" id="ship-actions-1" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
+                                <label style="font-size: 13px; white-space: nowrap;">انتخاب راننده:</label>
+                                <select class="driver-select" style="flex: 1;" id="driver-select-1">
+                                    <option value="">-- انتخاب کنید --</option>
+                                    <option value="رضا احمدی">رضا احمدی (کامیون یخچالدار)</option>
+                                    <option value="حسین کریمی">حسین کریمی (ون)</option>
+                                    <option value="مهدی رضایی">مهدی رضایی (کامیونت)</option>
+                                </select>
+                            </div>
+                            <div class="shipping-btns-group">
+                                <button class="btn-refer-finance" onclick="openDiscrepancyModal('1')"><i class="fa-solid fa-scale-unbalanced"></i> مغایرت وزن / ارجاع به مالی</button>
+                                <button class="btn-ship" onclick="openDeliveryModal('1')"><i class="fa-solid fa-truck"></i> ثبت وزن و تحویل به راننده</button>
+                            </div>
+                        </div>
+                        <!-- نوار تحویل موفق + دکمه مرجوعی -->
+                        <div class="shipping-delivered-bar" id="ship-delivered-1">
+                            <span class="delivered-msg"><i class="fa-solid fa-circle-check"></i> <span id="ship-delivered-text-1">با موفقیت تحویل داده شد</span></span>
+                            <button class="btn-return-order" id="btn-return-1" onclick="openReturnModal('1')"><i class="fa-solid fa-rotate-left"></i> مرجوع کردن سفارش</button>
+                        </div>
+                        <!-- خلاصه مرجوعی -->
+                        <div class="return-summary-box" id="return-summary-1"></div>
+                    </div>
+
+                    <!-- کارت ارسال 2 -->
+                    <div class="order-card" id="ship-order-2">
+                        <div class="shipping-header">
+                            <div class="shipping-header-top">
+                                <div class="shipping-details-grid">
+                                    <div class="detail-item"><span class="label">کد سفارش</span><span class="value bold">39161</span></div>
+                                    <div class="detail-item"><span class="label">طرف حساب</span><span class="value">صنایع شیمیایی غفاری / آقای عباسی</span></div>
+                                </div>
+                                <button class="btn-print-single" onclick="printSingleOrder('ship-order-2')"><i class="fa-solid fa-print"></i> پرینت</button>
+                            </div>
+                            <div class="address-box"><i class="fa-solid fa-location-dot" style="color: var(--danger-color); margin-left: 5px;"></i><strong>آدرس مشتری:</strong> تهران، جاده قدیم کرج، شهرک صنعتی سیمین دشت، شرکت صنایع شیمیایی غفاری</div>
+                        </div>
+                        <div class="rejected-alert" id="ship-reject-alert-2">
+                            <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                        </div>
+                        <table class="order-table" id="ship-table-2">
+                            <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>مقدار تحویل شده (تولید / واقعی)</th></tr></thead>
+                            <tbody>
+                                <tr><td>قلوه گاه تکر بره</td><td>13 kg</td><td>13 kg</td></tr>
+                                <tr><td>سردست بدون گردن ممتاز</td><td>24 kg</td><td>24 kg</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="shipping-locked" id="ship-locked-2" style="display: flex;"><i class="fa-solid fa-lock"></i> این سفارش در انتظار تایید نهایی توسط واحد مالی است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.</div>
+                        <div class="shipping-actions" id="ship-actions-2" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
+                                <label style="font-size: 13px; white-space: nowrap;">انتخاب راننده:</label>
+                                <select class="driver-select" style="flex: 1;" id="driver-select-2">
+                                    <option value="">-- انتخاب کنید --</option>
+                                    <option value="رضا احمدی">رضا احمدی (کامیون یخچالدار)</option>
+                                    <option value="حسین کریمی">حسین کریمی (ون)</option>
+                                    <option value="مهدی رضایی">مهدی رضایی (کامیونت)</option>
+                                </select>
+                            </div>
+                            <div class="shipping-btns-group">
+                                <button class="btn-refer-finance" onclick="openDiscrepancyModal('2')"><i class="fa-solid fa-scale-unbalanced"></i> مغایرت وزن / ارجاع به مالی</button>
+                                <button class="btn-ship" onclick="openDeliveryModal('2')"><i class="fa-solid fa-truck"></i> ثبت وزن و تحویل به راننده</button>
+                            </div>
+                        </div>
+                        <!-- نوار تحویل موفق + دکمه مرجوعی -->
+                        <div class="shipping-delivered-bar" id="ship-delivered-2">
+                            <span class="delivered-msg"><i class="fa-solid fa-circle-check"></i> <span id="ship-delivered-text-2">با موفقیت تحویل داده شد</span></span>
+                            <button class="btn-return-order" id="btn-return-2" onclick="openReturnModal('2')"><i class="fa-solid fa-rotate-left"></i> مرجوع کردن سفارش</button>
+                        </div>
+                        <!-- خلاصه مرجوعی -->
+                        <div class="return-summary-box" id="return-summary-2"></div>
+                    </div>
+
+                    <!-- کارت ارسال 3 -->
+                    <div class="order-card" id="ship-order-3">
+                        <div class="shipping-header">
+                            <div class="shipping-header-top">
+                                <div class="shipping-details-grid">
+                                    <div class="detail-item"><span class="label">کد سفارش</span><span class="value bold">39175</span></div>
+                                    <div class="detail-item"><span class="label">طرف حساب</span><span class="value">رستوران سنتی الوند / آقای صادقی</span></div>
+                                </div>
+                                <button class="btn-print-single" onclick="printSingleOrder('ship-order-3')"><i class="fa-solid fa-print"></i> پرینت</button>
+                            </div>
+                            <div class="address-box"><i class="fa-solid fa-location-dot" style="color: var(--danger-color); margin-left: 5px;"></i><strong>آدرس مشتری:</strong> تهران، خیابان ولیعصر، نرسیده به پارک ساعی، رستوران الوند</div>
+                        </div>
+                        <div class="rejected-alert" id="ship-reject-alert-3">
+                            <i class="fa-solid fa-circle-exclamation"></i><span class="reject-alert-msg"></span>
+                        </div>
+                        <table class="order-table" id="ship-table-3">
+                            <thead><tr><th>نام محصول</th><th>مقدار درخواستی</th><th>مقدار تحویل شده (تولید / واقعی)</th></tr></thead>
+                            <tbody>
+                                <tr><td>ماهیچه گوسفندی</td><td>8 kg</td><td>8 kg</td></tr>
+                            </tbody>
+                        </table>
+                        <div class="shipping-locked" id="ship-locked-3" style="display: flex;"><i class="fa-solid fa-lock"></i> این سفارش در انتظار تایید نهایی توسط واحد مالی است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.</div>
+                        <div class="shipping-actions" id="ship-actions-3" style="display: none;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 240px;">
+                                <label style="font-size: 13px; white-space: nowrap;">انتخاب راننده:</label>
+                                <select class="driver-select" style="flex: 1;" id="driver-select-3">
+                                    <option value="">-- انتخاب کنید --</option>
+                                    <option value="رضا احمدی">رضا احمدی (کامیون یخچالدار)</option>
+                                    <option value="حسین کریمی">حسین کریمی (ون)</option>
+                                    <option value="مهدی رضایی">مهدی رضایی (کامیونت)</option>
+                                </select>
+                            </div>
+                            <div class="shipping-btns-group">
+                                <button class="btn-refer-finance" onclick="openDiscrepancyModal('3')"><i class="fa-solid fa-scale-unbalanced"></i> مغایرت وزن / ارجاع به مالی</button>
+                                <button class="btn-ship" onclick="openDeliveryModal('3')"><i class="fa-solid fa-truck"></i> ثبت وزن و تحویل به راننده</button>
+                            </div>
+                        </div>
+                        <!-- نوار تحویل موفق + دکمه مرجوعی -->
+                        <div class="shipping-delivered-bar" id="ship-delivered-3">
+                            <span class="delivered-msg"><i class="fa-solid fa-circle-check"></i> <span id="ship-delivered-text-3">با موفقیت تحویل داده شد</span></span>
+                            <button class="btn-return-order" id="btn-return-3" onclick="openReturnModal('3')"><i class="fa-solid fa-rotate-left"></i> مرجوع کردن سفارش</button>
+                        </div>
+                        <!-- خلاصه مرجوعی -->
+                        <div class="return-summary-box" id="return-summary-3"></div>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- کانتینر پاپ‌آپ اعلان‌ها (Toast Notifications) -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Modal ثبت وزن تولید -->
+    <div class="modal-overlay" id="weightModal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>ثبت وزن دقیق تحویلی (تولید)</h3><button class="close-btn" onclick="closeWeightModal()">&times;</button></div>
+            <div class="modal-body">
+                <p class="modal-product-name">محصول: <span id="modalProductName"></span></p>
+                <div class="input-group">
+                    <label for="exactWeight">وزن دقیق تحویل داده شده (کیلوگرم):</label>
+                    <input type="number" id="exactWeight" step="0.01" placeholder="مثلا 30.5">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="closeWeightModal()">انصراف</button>
+                <button class="btn-primary" onclick="submitWeight()">ثبت وزن</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal دلیل رد (مشترک بین تولید و مالی) -->
+    <div class="modal-overlay" id="rejectModal">
+        <div class="modal-content">
+            <div class="modal-header danger"><h3 id="rejectModalTitle">دلیل رد سفارش</h3><button class="close-btn" onclick="closeRejectModal()">&times;</button></div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label for="rejectReason">لطفاً دلیل و توضیحات رد این سفارش را وارد کنید:</label>
+                    <textarea id="rejectReason" rows="4" placeholder="توضیحات خود را بنویسید..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="closeRejectModal()">انصراف</button>
+                <button class="btn-danger" onclick="submitReject()">ثبت و رد سفارش</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal مغایرت وزن و ارجاع مجدد به مالی -->
+    <div class="modal-overlay" id="discrepancyModal">
+        <div class="modal-content">
+            <div class="modal-header warning">
+                <h3><i class="fa-solid fa-scale-unbalanced"></i> اصلاح وزن و ارجاع به واحد مالی</h3>
+                <button class="close-btn" onclick="closeDiscrepancyModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 13px; margin-bottom: 15px; color: var(--text-muted);">وزن واقعی مشاهده‌شده در بخش ارسال را وارد کنید تا فاکتور مجدداً توسط واحد مالی بررسی و تایید شود:</p>
+                <div id="discrepancy-items-container" style="margin-bottom: 15px;"></div>
+                <div class="input-group" style="margin-bottom: 0;">
+                    <label for="discrepancyNote">توضیحات مغایرت وزن برای واحد مالی:</label>
+                    <textarea id="discrepancyNote" rows="3" placeholder="مثلاً: وزن باسکول ارسال با وزن ثبت‌شده تولید مغایرت دارد..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="closeDiscrepancyModal()">انصراف</button>
+                <button class="btn-warning" onclick="submitDiscrepancyToFinance()">ارسال مجدد به واحد مالی</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal ثبت وزن نهایی برای ارسال -->
+    <div class="modal-overlay" id="deliveryModal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>ثبت وزن نهایی و تحویل به راننده</h3><button class="close-btn" onclick="closeDeliveryModal()">&times;</button></div>
+            <div class="modal-body">
+                <p style="font-size: 13px; margin-bottom: 15px; color: var(--text-muted);">لطفاً وزن دقیق تحویل داده شده به راننده را برای هر محصول وارد کنید:</p>
+                <div id="delivery-items-container"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="closeDeliveryModal()">انصراف</button>
+                <button class="btn-primary" onclick="submitDelivery()">تایید نهایی و خروج</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal مرجوع کردن سفارش -->
+    <div class="modal-overlay" id="returnModal">
+        <div class="modal-content">
+            <div class="modal-header danger">
+                <h3><i class="fa-solid fa-rotate-left"></i> ثبت مرجوعی سفارش</h3>
+                <button class="close-btn" onclick="closeReturnModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 13px; margin-bottom: 15px; color: var(--text-muted);">مقدار مرجوع‌شده (به کیلوگرم) را برای هر محصول وارد کنید:</p>
+                <div id="return-items-container" style="margin-bottom: 15px;"></div>
+                <div class="input-group" style="margin-bottom: 0;">
+                    <label for="returnNotes">توضیحات و علت مرجوعی:</label>
+                    <textarea id="returnNotes" rows="3" placeholder="توضیحات مربوط به مرجوعی را وارد کنید..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-outline" onclick="closeReturnModal()">انصراف</button>
+                <button class="btn-danger" onclick="submitReturn()">ثبت مرجوعی</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================= مدیریت اعلان‌ها و همگام‌سازی بین بخش‌ها =================
+        const orderCodes = {
+            '1': '39138',
+            '2': '39161',
+            '3': '39175'
+        };
+
+        const deptNames = {
+            'production': 'بخش تولید',
+            'finance': 'بخش مالی',
+            'shipping': 'بخش ارسال'
+        };
+
+        const unreadNotifications = {
+            'production': [],
+            'finance': [],
+            'shipping': []
+        };
+
+        function showToastNotification(title, message, targetDeptLabel, type = 'danger') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast-popup' + (type === 'warning' ? ' warning-toast' : '');
+            const iconClass = type === 'warning' ? 'fa-scale-unbalanced' : 'fa-bell';
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <span><i class="fa-solid ${iconClass}"></i> ${title}</span>
+                    <button class="toast-close" onclick="this.parentElement.parentElement.remove()">&times;</button>
+                </div>
+                <div class="toast-body">${message}</div>
+                <div><span class="toast-tag">${targetDeptLabel}</span></div>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                if (toast.parentElement) toast.remove();
+            }, 9000);
+        }
+
+        function updateSidebarBadges() {
+            ['production', 'finance', 'shipping'].forEach(dept => {
+                const badge = document.getElementById('badge-' + dept);
+                const count = unreadNotifications[dept].length;
+                if (count > 0) {
+                    badge.innerText = count;
+                    badge.style.display = 'flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            });
+        }
+
+        // تابع مرکزی اعمال وضعیت رد سفارش در تمام بخش‌ها
+        function syncRejectionAcrossAllDepartments(shortId, sourceDept, reason) {
+            const orderCode = orderCodes[shortId];
+            const sourceName = deptNames[sourceDept];
+            const alertHtml = `سفارش توسط <strong>${sourceName}</strong> رد شد — دلیل: <strong>${reason}</strong>`;
+
+            // 1. به‌روزرسانی کارت در بخش تولید
+            const prodCard = document.getElementById('prod-order-' + shortId);
+            prodCard.classList.remove('completed');
+            prodCard.classList.add('rejected');
+            document.getElementById('actions-' + shortId).style.display = 'none';
+            const prodCompleteBtn = prodCard.querySelector('.btn-complete-order');
+            if (prodCompleteBtn) prodCompleteBtn.style.display = 'none';
+            const prodAlert = document.getElementById('reject-alert-' + shortId);
+            prodAlert.style.display = 'flex';
+            prodAlert.querySelector('.reject-alert-msg').innerHTML = alertHtml;
+
+            // 2. به‌روزرسانی کارت در بخش مالی
+            const finCard = document.getElementById('finance-order-' + shortId);
+            finCard.classList.remove('discrepancy');
+            finCard.classList.add('rejected');
+            document.getElementById('finance-discrepancy-alert-' + shortId).style.display = 'none';
+            document.getElementById('finance-btn-' + shortId).style.display = 'none';
+            document.getElementById('finance-reject-btn-' + shortId).style.display = 'none';
+            const finRejectedBadge = document.getElementById('finance-rejected-badge-' + shortId);
+            finRejectedBadge.style.display = 'inline-flex';
+            finRejectedBadge.innerHTML = `<i class="fa-solid fa-ban"></i> رد شده توسط ${sourceName}`;
+            
+            const finAlert = document.getElementById('finance-reject-alert-' + shortId);
+            finAlert.style.display = 'flex';
+            finAlert.querySelector('.reject-alert-msg').innerHTML = alertHtml;
+
+            const finStatus = document.getElementById('finance-status-' + shortId);
+            finStatus.innerText = `رد شده (${sourceName})`;
+            finStatus.style.color = 'var(--danger-color)';
+
+            // 3. به‌روزرسانی کارت در بخش ارسال
+            const shipCard = document.getElementById('ship-order-' + shortId);
+            shipCard.classList.add('rejected');
+            document.getElementById('ship-actions-' + shortId).style.display = 'none';
+            
+            const shipAlert = document.getElementById('ship-reject-alert-' + shortId);
+            shipAlert.style.display = 'flex';
+            shipAlert.querySelector('.reject-alert-msg').innerHTML = alertHtml;
+
+            const shipLocked = document.getElementById('ship-locked-' + shortId);
+            shipLocked.style.display = 'flex';
+            shipLocked.classList.add('rejected-lock');
+            shipLocked.innerHTML = `<i class="fa-solid fa-ban"></i> این سفارش توسط ${sourceName} رد شده و ارسال آن لغو گردید.`;
+
+            // 4. ارسال نوتیفیکیشن پاپ‌آپ
+            const notifTitle = `رد سفارش کد ${orderCode}`;
+            const notifMessage = `سفارش <strong>${orderCode}</strong> توسط <strong>${sourceName}</strong> رد شد.<br><strong>توضیحات:</strong> ${reason}`;
+
+            showToastNotification(notifTitle, notifMessage, `اعلان به تمام بخش‌ها ارسال شد`, 'danger');
+
+            ['production', 'finance', 'shipping'].forEach(dept => {
+                if (dept !== sourceDept) {
+                    unreadNotifications[dept].push({
+                        title: notifTitle,
+                        message: notifMessage,
+                        deptLabel: `اعلان ویژه ${deptNames[dept]}`,
+                        type: 'danger'
+                    });
+                }
+            });
+            updateSidebarBadges();
+        }
+
+        // ================= مدیریت پرینت =================
+        function printSingleOrder(cardId) {
+            document.querySelectorAll('.order-card').forEach(card => card.classList.remove('print-target'));
+            const targetCard = document.getElementById(cardId);
+            if (targetCard) {
+                targetCard.classList.add('print-target');
+                document.body.classList.add('printing-single');
+                window.print();
+                setTimeout(() => {
+                    document.body.classList.remove('printing-single');
+                    targetCard.classList.remove('print-target');
+                }, 300);
+            }
+        }
+
+        function printAllOrders() {
+            document.body.classList.remove('printing-single');
+            document.querySelectorAll('.order-card').forEach(card => card.classList.remove('print-target'));
+            window.print();
+        }
+
+        // ================= مدیریت صفحات =================
+        function switchPage(pageName) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.querySelectorAll('.menu-icons li').forEach(li => li.classList.remove('active'));
+            document.getElementById('page-' + pageName).classList.add('active');
+            document.getElementById('menu-' + pageName).classList.add('active');
+
+            if (unreadNotifications[pageName] && unreadNotifications[pageName].length > 0) {
+                unreadNotifications[pageName].forEach(notif => {
+                    showToastNotification(notif.title, notif.message, notif.deptLabel, notif.type || 'danger');
+                });
+                unreadNotifications[pageName] = [];
+                updateSidebarBadges();
+            }
+        }
+
+        // ================= مدیریت تب‌های داخلی صفحه تولید =================
+        function switchProdTab(tabName) {
+            document.querySelectorAll('.prod-tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.prod-tab-btn').forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById('prod-tab-' + tabName).classList.add('active');
+            document.getElementById('tab-btn-' + tabName).classList.add('active');
+        }
+
+        let currentBtnElement = null;
+        let currentOrderId = null;
+        let currentRejectOrderId = null;
+        let currentRejectSource = null;
+        let currentDeliveryOrderId = null;
+        let currentReturnOrderId = null;
+        let currentDiscrepancyOrderId = null;
+
+        const weightModal = document.getElementById('weightModal');
+        const modalProductName = document.getElementById('modalProductName');
+        const exactWeightInput = document.getElementById('exactWeight');
+        const rejectModal = document.getElementById('rejectModal');
+        const rejectReasonInput = document.getElementById('rejectReason');
+        const deliveryModal = document.getElementById('deliveryModal');
+        const deliveryItemsContainer = document.getElementById('delivery-items-container');
+        const returnModal = document.getElementById('returnModal');
+        const returnItemsContainer = document.getElementById('return-items-container');
+        const returnNotesInput = document.getElementById('returnNotes');
+        const discrepancyModal = document.getElementById('discrepancyModal');
+        const discrepancyItemsContainer = document.getElementById('discrepancy-items-container');
+        const discrepancyNoteInput = document.getElementById('discrepancyNote');
+
+        // ================= بخش تولید و رد سفارش مشترک =================
+        function approveOrder(orderId, shortId) {
+            document.getElementById('actions-' + shortId).style.display = 'none';
+            const orderCard = document.getElementById(orderId);
+            const readyButtons = orderCard.querySelectorAll('.btn-ready');
+            readyButtons.forEach(btn => btn.disabled = false);
+        }
+
+        function openRejectModal(orderId, source) {
+            currentRejectOrderId = orderId;
+            currentRejectSource = source;
+            rejectReasonInput.value = '';
+            document.getElementById('rejectModalTitle').innerText = source === 'finance' ? 'دلیل رد سفارش (بخش مالی)' : 'دلیل رد سفارش (بخش تولید)';
+            rejectModal.classList.add('show');
+        }
+
+        function closeRejectModal() { rejectModal.classList.remove('show'); }
+
+        function submitReject() {
+            const reason = rejectReasonInput.value.trim();
+            if (!reason) { alert('لطفاً دلیل رد سفارش را وارد کنید.'); return; }
+
+            const shortId = currentRejectSource === 'production' 
+                ? currentRejectOrderId.replace('prod-order-', '') 
+                : currentRejectOrderId.replace('finance-order-', '');
+
+            syncRejectionAcrossAllDepartments(shortId, currentRejectSource, reason);
+            closeRejectModal();
+        }
+
+        function openWeightModal(btnElement, productName, orderId) {
+            currentBtnElement = btnElement;
+            currentOrderId = orderId;
+            modalProductName.innerText = productName;
+            exactWeightInput.value = ''; 
+            weightModal.classList.add('show');
+            setTimeout(() => exactWeightInput.focus(), 300);
+        }
+
+        function closeWeightModal() { weightModal.classList.remove('show'); }
+
+        function submitWeight() {
+            const weight = exactWeightInput.value;
+            if (!weight || weight <= 0) { alert('لطفاً یک وزن معتبر وارد کنید.'); return; }
+
+            const actionCell = currentBtnElement.parentElement;
+            actionCell.innerHTML = `<span class="status-delivered"><i class="fa-solid fa-check"></i> تحویل داده شده (${weight} kg)</span>`;
+
+            checkProductionCompletion(currentOrderId);
+            closeWeightModal();
+        }
+
+        function checkProductionCompletion(orderId) {
+            const orderCard = document.getElementById(orderId);
+            const remainingButtons = orderCard.querySelectorAll('.btn-ready');
+            const completeBtn = orderCard.querySelector('.btn-complete-order');
+            if (remainingButtons.length === 0) { completeBtn.style.display = 'inline-flex'; }
+        }
+
+        function completeProduction(orderId, shortId) {
+            const orderCard = document.getElementById(orderId);
+            orderCard.classList.add('completed');
+            
+            const completeBtn = orderCard.querySelector('.btn-complete-order');
+            completeBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> تولید تکمیل و به مالی ارسال شد';
+            completeBtn.style.backgroundColor = '#6c757d';
+            completeBtn.style.animation = 'none';
+            completeBtn.disabled = true;
+
+            // باز کردن قفل بخش مالی (دکمه تایید و دکمه رد)
+            const financeBtn = document.getElementById('finance-btn-' + shortId);
+            financeBtn.disabled = false;
+            financeBtn.innerHTML = '<i class="fa-solid fa-stamp"></i> تایید حسابداری';
+            financeBtn.style.backgroundColor = 'var(--primary-color)';
+
+            const financeRejectBtn = document.getElementById('finance-reject-btn-' + shortId);
+            financeRejectBtn.disabled = false;
+            
+            const financeStatus = document.getElementById('finance-status-' + shortId);
+            financeStatus.innerText = 'در انتظار تایید مالی';
+            financeStatus.style.color = 'orange';
+        }
+
+        // ================= بخش مالی =================
+        function approveFinance(cardId, btnId, badgeId, shortId) {
+            const btn = document.getElementById(btnId);
+            if (btn.disabled) return;
+
+            const finCard = document.getElementById(cardId);
+            finCard.classList.remove('discrepancy');
+            document.getElementById('finance-discrepancy-alert-' + shortId).style.display = 'none';
+
+            document.getElementById('finance-status-' + shortId).innerText = 'تایید شده';
+            document.getElementById('finance-status-' + shortId).style.color = '#1e7e34';
+            
+            btn.style.display = 'none';
+            document.getElementById('finance-reject-btn-' + shortId).style.display = 'none';
+            document.getElementById(badgeId).style.display = 'inline-flex';
+            finCard.style.borderColor = '#28a745';
+
+            // باز کردن قفل بخش ارسال
+            const shipLocked = document.getElementById('ship-locked-' + shortId);
+            shipLocked.style.display = 'none';
+            shipLocked.style.backgroundColor = '';
+            shipLocked.style.color = '';
+            document.getElementById('ship-actions-' + shortId).style.display = 'flex';
+        }
+
+        // ================= بخش ارسال: مغایرت وزن و ارجاع مجدد به مالی =================
+        function openDiscrepancyModal(shortId) {
+            currentDiscrepancyOrderId = shortId;
+            discrepancyItemsContainer.innerHTML = '';
+            discrepancyNoteInput.value = '';
+
+            const shipTable = document.getElementById('ship-table-' + shortId);
+            const rows = shipTable.querySelectorAll('tbody tr');
+
+            rows.forEach((row) => {
+                const productName = row.cells[0].innerText;
+                // استخراج وزن عددی فعلی (در صورت وجود dataset از آن می‌خوانیم، وگرنه از متن سلول)
+                const currentWeight = row.dataset.currentWeight 
+                    ? parseFloat(row.dataset.currentWeight) 
+                    : parseFloat(row.cells[2].innerText.replace('kg', '').trim());
+
+                const div = document.createElement('div');
+                div.className = 'delivery-row';
+                div.innerHTML = `
+                    <div>
+                        <span>${productName}</span>
+                        <small>وزن ثبت‌شده فعلی: ${currentWeight} kg</small>
+                    </div>
+                    <input type="number" class="discrepancy-weight-input" data-product="${productName}" data-old="${currentWeight}" step="0.01" min="0.01" value="${currentWeight}" placeholder="وزن واقعی (kg)">
+                `;
+                discrepancyItemsContainer.appendChild(div);
+            });
+
+            discrepancyModal.classList.add('show');
+        }
+
+        function closeDiscrepancyModal() { discrepancyModal.classList.remove('show'); }
+
+        function submitDiscrepancyToFinance() {
+            const inputs = discrepancyItemsContainer.querySelectorAll('.discrepancy-weight-input');
+            const note = discrepancyNoteInput.value.trim();
+            let isValid = true;
+            let hasAnyChange = false;
+            let changesSummary = [];
+
+            inputs.forEach(input => {
+                const newVal = parseFloat(input.value);
+                const oldVal = parseFloat(input.dataset.old);
+                if (!newVal || newVal <= 0) {
+                    isValid = false;
+                } else if (newVal !== oldVal) {
+                    hasAnyChange = true;
+                    changesSummary.push(`${input.dataset.product}: ${oldVal}kg ← ${newVal}kg`);
+                }
+            });
+
+            if (!isValid) {
+                alert('لطفاً وزن واقعی معتبر (بزرگتر از صفر) برای همه محصولات وارد کنید.');
+                return;
+            }
+
+            if (!hasAnyChange) {
+                alert('هیچ تغییری در وزن محصولات نسبت به مقدار فعلی ایجاد نشده است.');
+                return;
+            }
+
+            if (!note) {
+                alert('لطفاً توضیحات علت مغایرت وزن را برای واحد مالی وارد کنید.');
+                return;
+            }
+
+            const shortId = currentDiscrepancyOrderId;
+            const orderCode = orderCodes[shortId];
+
+            // 1. به‌روزرسانی جدول ارسال و قفل کردن مجدد بخش ارسال تا تایید مجدد مالی
+            const shipTableRows = document.getElementById('ship-table-' + shortId).querySelectorAll('tbody tr');
+            const finTableRows = document.getElementById('finance-table-' + shortId).querySelectorAll('tbody tr');
+
+            inputs.forEach((input, idx) => {
+                const newVal = parseFloat(input.value);
+                const oldVal = parseFloat(input.dataset.old);
+
+                shipTableRows[idx].dataset.currentWeight = newVal;
+                if (newVal !== oldVal) {
+                    shipTableRows[idx].cells[2].innerHTML = `<span class="old-weight-strike">${oldVal} kg</span> <span class="new-weight-highlight">${newVal} kg</span>`;
+                    finTableRows[idx].cells[2].innerHTML = `<span class="old-weight-strike">${oldVal} kg</span> <span class="new-weight-highlight">${newVal} kg (اصلاحی ارسال)</span>`;
+                } else {
+                    shipTableRows[idx].cells[2].innerText = `${newVal} kg`;
+                    finTableRows[idx].cells[2].innerText = `${newVal} kg`;
+                }
+            });
+
+            document.getElementById('ship-actions-' + shortId).style.display = 'none';
+            const shipLocked = document.getElementById('ship-locked-' + shortId);
+            shipLocked.style.display = 'flex';
+            shipLocked.classList.remove('rejected-lock');
+            shipLocked.innerHTML = `<i class="fa-solid fa-clock-rotate-left"></i> مغایرت وزن ثبت شد و سفارش جهت بررسی و تایید مجدد فاکتور به واحد مالی ارجاع گردید.`;
+
+            // 2. بازگرداندن کارت مالی به حالت بررسی مجدد
+            const finCard = document.getElementById('finance-order-' + shortId);
+            finCard.classList.add('discrepancy');
+            finCard.style.borderColor = '#f59e0b';
+
+            const finAlert = document.getElementById('finance-discrepancy-alert-' + shortId);
+            finAlert.style.display = 'flex';
+            finAlert.querySelector('.discrepancy-alert-msg').innerHTML = `<strong>ارجاع از واحد ارسال (مغایرت وزن):</strong> ${note} <br><small>(${changesSummary.join(' | ')})</small>`;
+
+            const finStatus = document.getElementById('finance-status-' + shortId);
+            finStatus.innerText = 'در انتظار تایید مجدد (اصلاح وزن)';
+            finStatus.style.color = '#b78103';
+
+            document.getElementById('finance-badge-' + shortId).style.display = 'none';
+            
+            const finApproveBtn = document.getElementById('finance-btn-' + shortId);
+            finApproveBtn.style.display = 'inline-flex';
+            finApproveBtn.disabled = false;
+            finApproveBtn.innerHTML = '<i class="fa-solid fa-stamp"></i> تایید مجدد فاکتور اصلاحی';
+
+            const finRejectBtn = document.getElementById('finance-reject-btn-' + shortId);
+            finRejectBtn.style.display = 'inline-flex';
+            finRejectBtn.disabled = false;
+
+            // 3. نمایش پاپ‌آپ اعلان در صفحه فعلی و ثبت اعلان برای واحد مالی
+            const notifTitle = `ارجاع مغایرت وزن — سفارش ${orderCode}`;
+            const notifMessage = `واحد ارسال مغایرت وزن سفارش <strong>${orderCode}</strong> را ثبت و برای تایید مجدد فاکتور به واحد مالی ارجاع داد.<br><strong>توضیحات:</strong> ${note}`;
+
+            showToastNotification(notifTitle, notifMessage, 'ارجاع به بخش مالی انجام شد', 'warning');
+
+            unreadNotifications['finance'].push({
+                title: notifTitle,
+                message: notifMessage,
+                deptLabel: 'اعلان ویژه بخش مالی',
+                type: 'warning'
+            });
+            updateSidebarBadges();
+
+            closeDiscrepancyModal();
+        }
+
+        // ================= بخش ارسال: تحویل به راننده =================
+        function openDeliveryModal(shortId) {
+            const driverName = document.getElementById('driver-select-' + shortId).value;
+            if (!driverName) { alert('لطفاً ابتدا یک راننده انتخاب کنید.'); return; }
+
+            currentDeliveryOrderId = shortId;
+            deliveryItemsContainer.innerHTML = ''; 
+
+            const shipCard = document.getElementById('ship-order-' + shortId);
+            const products = shipCard.querySelectorAll('.order-table tbody tr');
+            
+            products.forEach((row) => {
+                const productName = row.cells[0].innerText;
+                const deliveredWeight = row.dataset.currentWeight 
+                    ? parseFloat(row.dataset.currentWeight) 
+                    : parseFloat(row.cells[2].innerText.replace('kg', '').trim());
+
+                const div = document.createElement('div');
+                div.className = 'delivery-row';
+                div.innerHTML = `
+                    <span>${productName}</span>
+                    <input type="number" class="delivery-weight-input" step="0.01" value="${deliveredWeight}" placeholder="وزن (kg)">
+                `;
+                deliveryItemsContainer.appendChild(div);
+            });
+
+            deliveryModal.classList.add('show');
+        }
+
+        function closeDeliveryModal() { deliveryModal.classList.remove('show'); }
+
+        function submitDelivery() {
+            const inputs = deliveryItemsContainer.querySelectorAll('.delivery-weight-input');
+            let isValid = true;
+            
+            inputs.forEach(input => {
+                if (!input.value || input.value <= 0) isValid = false;
+            });
+
+            if (!isValid) { alert('لطفاً وزن معتبر برای تمام محصولات وارد کنید.'); return; }
+
+            const shipCard = document.getElementById('ship-order-' + currentDeliveryOrderId);
+            const driverName = document.getElementById('driver-select-' + currentDeliveryOrderId).value;
+
+            const rows = shipCard.querySelectorAll('.order-table tbody tr');
+            rows.forEach((row, index) => {
+                row.dataset.currentWeight = inputs[index].value;
+                row.cells[2].innerText = inputs[index].value + ' kg';
+            });
+
+            shipCard.style.borderColor = '#28a745';
+            document.getElementById('ship-actions-' + currentDeliveryOrderId).style.display = 'none';
+
+            const deliveredBar = document.getElementById('ship-delivered-' + currentDeliveryOrderId);
+            document.getElementById('ship-delivered-text-' + currentDeliveryOrderId).innerText = `با موفقیت تحویل داده شد (راننده: ${driverName})`;
+            deliveredBar.style.display = 'flex';
+
+            closeDeliveryModal();
+        }
+
+        // ================= بخش مرجوعی سفارش =================
+        function openReturnModal(shortId) {
+            currentReturnOrderId = shortId;
+            returnItemsContainer.innerHTML = '';
+            returnNotesInput.value = '';
+
+            const shipCard = document.getElementById('ship-order-' + shortId);
+            const products = shipCard.querySelectorAll('.order-table tbody tr');
+
+            products.forEach((row) => {
+                const productName = row.cells[0].innerText;
+                const maxWeight = row.dataset.currentWeight 
+                    ? parseFloat(row.dataset.currentWeight) 
+                    : parseFloat(row.cells[2].innerText.replace('kg', '').trim());
+
+                const div = document.createElement('div');
+                div.className = 'delivery-row';
+                div.innerHTML = `
+                    <div>
+                        <span>${productName}</span>
+                        <small>حداکثر مقدار تحویلی: ${maxWeight} kg</small>
+                    </div>
+                    <input type="number" class="return-weight-input" data-product="${productName}" data-max="${maxWeight}" step="0.01" min="0" max="${maxWeight}" value="0" placeholder="مقدار مرجوعی (kg)">
+                `;
+                returnItemsContainer.appendChild(div);
+            });
+
+            returnModal.classList.add('show');
+        }
+
+        function closeReturnModal() { returnModal.classList.remove('show'); }
+
+        function submitReturn() {
+            const inputs = returnItemsContainer.querySelectorAll('.return-weight-input');
+            const notes = returnNotesInput.value.trim();
+            let returnedItems = [];
+            let hasError = false;
+
+            inputs.forEach(input => {
+                const val = parseFloat(input.value) || 0;
+                const max = parseFloat(input.dataset.max);
+                const prodName = input.dataset.product;
+
+                if (val < 0 || val > max) {
+                    hasError = true;
+                } else if (val > 0) {
+                    returnedItems.push({ name: prodName, weight: val });
+                }
+            });
+
+            if (hasError) {
+                alert('مقدار مرجوعی نمی‌تواند منفی یا بیشتر از مقدار تحویل داده‌شده باشد.');
+                return;
+            }
+
+            if (returnedItems.length === 0) {
+                alert('لطفاً مقدار مرجوعی را حداقل برای یک محصول وارد کنید.');
+                return;
+            }
+
+            if (!notes) {
+                alert('لطفاً توضیحات مربوط به مرجوعی را وارد کنید.');
+                return;
+            }
+
+            const shipCard = document.getElementById('ship-order-' + currentReturnOrderId);
+            shipCard.style.borderColor = 'var(--danger-color)';
+
+            const returnBtn = document.getElementById('btn-return-' + currentReturnOrderId);
+            returnBtn.disabled = true;
+            returnBtn.innerHTML = '<i class="fa-solid fa-check"></i> مرجوعی ثبت شد';
+
+            const summaryBox = document.getElementById('return-summary-' + currentReturnOrderId);
+            let itemsHtml = returnedItems.map(item => `<li><strong>${item.name}:</strong> ${item.weight} kg مرجوع شد</li>`).join('');
+            
+            summaryBox.innerHTML = `
+                <div><strong><i class="fa-solid fa-triangle-exclamation"></i> گزارش مرجوعی ثبت شده:</strong></div>
+                <ul>${itemsHtml}</ul>
+                <div><strong>توضیحات مرجوعی:</strong> ${notes}</div>
+            `;
+            summaryBox.style.display = 'flex';
+
+            closeReturnModal();
+        }
+
+        // بستن مودال‌ها با کلیک بیرون از کادر
+        window.addEventListener('click', function(event) {
+            if (event.target === weightModal) closeWeightModal();
+            if (event.target === rejectModal) closeRejectModal();
+            if (event.target === deliveryModal) closeDeliveryModal();
+            if (event.target === returnModal) closeReturnModal();
+            if (event.target === discrepancyModal) closeDiscrepancyModal();
+        });
+    </script>
+</body>
+</html>
