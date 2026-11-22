@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Camera,
   ChevronLeft,
   Printer,
   RotateCcw,
@@ -26,6 +27,7 @@ interface FinancePageProps {
 
 type FinanceFilter =
   | 'all'
+  | 'driver_docs'
   | 'waiting_prod'
   | 'ready'
   | 'discrepancy'
@@ -48,9 +50,16 @@ function isPendingReturnConfirmInFinance(order: Order): boolean {
   );
 }
 
+function hasPendingDriverDocs(order: Order): boolean {
+  return Boolean(
+    order.driverDelivery?.sentToFinance && !order.driverDelivery?.financeVerified
+  );
+}
+
 function isFinancePriority(order: Order): boolean {
   return (
     isPendingReturnConfirmInFinance(order) ||
+    hasPendingDriverDocs(order) ||
     order.status === 'finance_discrepancy_review' ||
     order.status === 'pending_finance_approval'
   );
@@ -58,12 +67,13 @@ function isFinancePriority(order: Order): boolean {
 
 function getFinanceSortRank(order: Order): number {
   if (isPendingReturnConfirmInFinance(order)) return 0;
-  if (order.status === 'finance_discrepancy_review') return 1;
-  if (order.status === 'pending_finance_approval') return 2;
-  if (isWaitingProd(order)) return 3;
-  if (isFinanceApproved(order)) return 4;
-  if (order.status === 'returned') return 5;
-  return 6;
+  if (hasPendingDriverDocs(order)) return 1;
+  if (order.status === 'finance_discrepancy_review') return 2;
+  if (order.status === 'pending_finance_approval') return 3;
+  if (isWaitingProd(order)) return 4;
+  if (isFinanceApproved(order)) return 5;
+  if (order.status === 'returned') return 6;
+  return 7;
 }
 
 export const FinancePage: React.FC<FinancePageProps> = ({
@@ -80,6 +90,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     const filtered = orders.filter((order) => {
       const matchesFilter =
         filter === 'all' ||
+        (filter === 'driver_docs' && Boolean(order.driverDelivery?.sentToFinance)) ||
         (filter === 'waiting_prod' && isWaitingProd(order)) ||
         (filter === 'ready' && order.status === 'pending_finance_approval') ||
         (filter === 'discrepancy' && order.status === 'finance_discrepancy_review') ||
@@ -120,17 +131,22 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     if (order.status === 'returned') {
       const confirmed = order.returnRecord?.confirmations.finance.confirmed;
       return confirmed
-        ? { text: 'مرجوعی تایید شده (مالی)', className: 'text-emerald-700' }
-        : { text: 'مرجوع شده — در انتظار تایید مالی', className: 'text-red-700' };
+        ? { text: 'مرجوعی تایید شده (صدور فاکتور)', className: 'text-emerald-700' }
+        : { text: 'مرجوع شده — در انتظار تایید صدور فاکتور', className: 'text-red-700' };
+    }
+    if (order.driverDelivery?.sentToFinance) {
+      return order.driverDelivery.financeVerified
+        ? { text: 'مدارک تحویل راننده تایید شد', className: 'text-emerald-700' }
+        : { text: 'مدارک تحویل راننده دریافت شد (نیازمند بررسی)', className: 'text-emerald-700' };
     }
     if (order.status === 'finance_discrepancy_review') {
       return { text: 'در انتظار تایید مجدد (اصلاح وزن)', className: 'text-amber-700' };
     }
     if (order.status === 'pending_finance_approval') {
-      return { text: 'در انتظار تایید مالی', className: 'text-[#0f5864]' };
+      return { text: 'در انتظار صدور فاکتور', className: 'text-[#0f5864]' };
     }
     if (isFinanceApproved(order)) {
-      return { text: 'تایید شده', className: 'text-emerald-700' };
+      return { text: 'فاکتور صادر و تایید شد', className: 'text-emerald-700' };
     }
     return { text: 'در انتظار تولید', className: 'text-slate-500' };
   };
@@ -142,7 +158,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
         <div className="flex items-center gap-2 text-[13px] text-slate-500">
           <span>داشبورد مدیریت</span>
           <ChevronLeft className="w-4 h-4 text-slate-400" />
-          <span className="font-bold text-slate-800">بخش مالی</span>
+          <span className="font-bold text-slate-800">بخش صدور فاکتور</span>
         </div>
 
         <button
@@ -172,6 +188,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
           {(
             [
               { id: 'all', label: 'همه' },
+              { id: 'driver_docs', label: 'مدارک تحویل راننده' },
               { id: 'ready', label: 'آماده تایید' },
               { id: 'discrepancy', label: 'مغایرت وزن' },
               { id: 'returned', label: 'مرجوعی' },
@@ -201,24 +218,29 @@ export const FinancePage: React.FC<FinancePageProps> = ({
         {sortedAndFilteredOrders.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
             <p className="text-sm font-medium text-slate-600 mb-3">
-              سفارشی در این دسته‌بندی مالی وجود ندارد.
+              {orders.length === 0
+                ? 'در این تاریخ سفارشی برای صدور فاکتور ثبت نشده است.'
+                : 'سفارشی در این دسته‌بندی بخش صدور فاکتور وجود ندارد.'}
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setFilter('all');
-              }}
-              className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
-            >
-              نمایش همه سفارش‌ها
-            </button>
+            {orders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilter('all');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
+              >
+                نمایش همه سفارش‌ها
+              </button>
+            )}
           </div>
         ) : (
           sortedAndFilteredOrders.map((order, index) => {
             const rejected = order.status === 'rejected';
             const returned = order.status === 'returned';
             const pendingReturnConfirm = isPendingReturnConfirmInFinance(order);
+            const pendingDriverDocs = hasPendingDriverDocs(order);
             const discrepancy = order.status === 'finance_discrepancy_review';
             const readyForApproval = order.status === 'pending_finance_approval';
             const approved = isFinanceApproved(order);
@@ -234,15 +256,17 @@ export const FinancePage: React.FC<FinancePageProps> = ({
 
             const cardStyle = pendingReturnConfirm
               ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20 hover:bg-red-50/30'
-              : rejected || returned
-                ? 'border border-red-300 bg-red-50/20 hover:border-red-400'
-                : discrepancy
-                  ? 'border-2 border-amber-500 bg-amber-50/20 shadow-md ring-2 ring-amber-500/20 hover:bg-amber-50/40'
-                  : readyForApproval
-                    ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15 hover:bg-[#f4fafa]'
-                    : approved
-                      ? 'border border-emerald-400 bg-emerald-50/20 hover:border-emerald-500'
-                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864] hover:shadow-xs';
+              : pendingDriverDocs
+                ? 'border-2 border-emerald-600 bg-white shadow-md ring-2 ring-emerald-500/20 hover:bg-emerald-50/30'
+                : rejected || returned
+                  ? 'border border-red-300 bg-red-50/20 hover:border-red-400'
+                  : discrepancy
+                    ? 'border-2 border-amber-500 bg-amber-50/20 shadow-md ring-2 ring-amber-500/20 hover:bg-amber-50/40'
+                    : readyForApproval
+                      ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15 hover:bg-[#f4fafa]'
+                      : approved
+                        ? 'border border-emerald-400 bg-emerald-50/20 hover:border-emerald-500'
+                        : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864] hover:shadow-xs';
 
             return (
               <React.Fragment key={order.id}>
@@ -270,7 +294,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                       <div className="no-print px-5 py-1.5 bg-red-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-2">
                           <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                          اولویت فوری مالی — سفارش مرجوعی نیازمند اصلاح سند و تایید مرجوعی
+                          اولویت فوری صدور فاکتور — سفارش مرجوعی نیازمند اصلاح سند و تایید مرجوعی
                         </span>
                         <span className="tabular-nums opacity-95 text-[11px]">
                           کسر مرجوعی: {formatRial(returnDeduction)}
@@ -278,11 +302,21 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                       </div>
                     )}
 
+                    {pendingDriverDocs && !pendingReturnConfirm && (
+                      <div className="no-print px-5 py-1.5 bg-emerald-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-2">
+                          <Camera className="w-3.5 h-3.5 shrink-0" />
+                          مدارک تحویل راننده دریافت شد — عکس فاکتور و رسید پرداخت آماده بررسی و تایید
+                        </span>
+                        <span className="opacity-95 text-[11px]">کلیک برای مشاهده عکس‌ها</span>
+                      </div>
+                    )}
+
                     {discrepancy && (
                       <div className="no-print px-5 py-1.5 bg-amber-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-2">
                           <Scale className="w-3.5 h-3.5 shrink-0" />
-                          اولویت فوری مالی — ارجاع مغایرت وزن از ارسال (نیازمند تایید مجدد)
+                          اولویت فوری صدور فاکتور — ارجاع مغایرت وزن از ارسال (نیازمند تایید مجدد)
                         </span>
                         <span className="opacity-95 text-[11px]">کلیک برای بررسی</span>
                       </div>
@@ -292,7 +326,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                       <div className="no-print px-5 py-1.5 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-2">
                           <Zap className="w-3.5 h-3.5 shrink-0" />
-                          وارد شده به صف مالی — تولید تکمیل شده و آماده تایید حسابداری
+                          وارد شده به صف صدور فاکتور — تولید تکمیل شده و آماده صدور فاکتور
                         </span>
                         <span className="opacity-95 text-[11px]">کلیک برای تایید</span>
                       </div>
@@ -328,7 +362,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                         </div>
 
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت مالی</span>
+                          <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت صدور فاکتور</span>
                           <span className={`font-bold text-xs ${statusInfo.className}`}>
                             {statusInfo.text}
                           </span>

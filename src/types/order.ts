@@ -1,4 +1,4 @@
-export type Department = 'production' | 'finance' | 'shipping' | 'reports';
+export type Department = 'production' | 'finance' | 'shipping' | 'driver' | 'reports';
 
 export type WorkflowDepartment = 'production' | 'finance' | 'shipping';
 
@@ -56,21 +56,41 @@ export interface ReturnRecord {
   confirmations: Record<WorkflowDepartment, ReturnDepartmentConfirmation>;
 }
 
+export interface UploadedDocumentPhoto {
+  dataUrl: string;
+  fileName: string;
+  uploadedAt: string;
+}
+
+export interface DriverDeliveryRecord {
+  invoicePhoto?: UploadedDocumentPhoto;
+  paymentReceiptPhoto?: UploadedDocumentPhoto;
+  completedAt?: string;
+  sentToFinance: boolean;
+  financeVerified?: boolean;
+  financeVerifiedAt?: string;
+}
+
 export interface Order {
   id: string;
   code: string;
   deliverySlot: string;
   customerName: string;
   customerPhone: string;
+  district: string;
   address: string;
   notes: string;
   callDurationSeconds: number;
   status: OrderStatus;
   items: OrderItem[];
   driverName: string;
+  routeOrder: number;
+  driverDelivery?: DriverDeliveryRecord;
   rejection?: RejectionRecord;
   discrepancy?: DiscrepancyRecord;
   returnRecord?: ReturnRecord;
+  deliveryDate: string; // e.g. "1405-09-01"
+  seenByDept: Record<WorkflowDepartment, boolean>;
   createdAt: string;
   lastActionAt: number;
 }

@@ -232,7 +232,7 @@ export const RejectModal: React.FC<RejectModalProps> = ({
       tone="danger"
       title={
         source === 'finance'
-          ? `دلیل رد سفارش ${orderCode} (بخش مالی)`
+          ? `دلیل رد سفارش ${orderCode} (بخش صدور فاکتور)`
           : `دلیل رد سفارش ${orderCode} (بخش تولید)`
       }
       footer={
@@ -335,7 +335,7 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
     }
 
     if (!note.trim()) {
-      setError('لطفاً توضیحات علت مغایرت وزن را برای واحد مالی وارد کنید.');
+      setError('لطفاً توضیحات علت مغایرت وزن را برای واحد صدور فاکتور وارد کنید.');
       return;
     }
 
@@ -349,7 +349,7 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
       onClose={onClose}
       tone="warning"
       icon={<Scale className="w-4 h-4" />}
-      title={`اصلاح وزن و ارجاع به واحد مالی (سفارش ${order?.code ?? ''})`}
+      title={`اصلاح وزن و ارجاع به واحد صدور فاکتور (سفارش ${order?.code ?? ''})`}
       footer={
         <>
           <button
@@ -364,14 +364,14 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
             form="discrepancy-modal-form"
             className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
           >
-            ارسال مجدد به واحد مالی
+            ارسال مجدد به واحد صدور فاکتور
           </button>
         </>
       }
     >
       <form id="discrepancy-modal-form" onSubmit={handleSubmit} className="space-y-4">
         <p className="text-xs text-slate-600 leading-relaxed">
-          وزن واقعی مشاهده‌شده در بخش ارسال را وارد کنید تا فاکتور مجدداً توسط واحد مالی بررسی و تایید شود:
+          وزن واقعی مشاهده‌شده در بخش ارسال را وارد کنید تا فاکتور مجدداً توسط واحد صدور فاکتور بررسی و تایید شود:
         </p>
 
         <div className="space-y-2.5">
@@ -406,7 +406,7 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
 
         <div className="space-y-1.5">
           <label htmlFor="discrepancy-note" className="block text-xs font-medium text-slate-700">
-            توضیحات مغایرت وزن برای واحد مالی:
+            توضیحات مغایرت وزن برای واحد صدور فاکتور:
           </label>
           <textarea
             id="discrepancy-note"

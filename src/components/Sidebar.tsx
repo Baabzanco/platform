@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Factory,
   FileSpreadsheet,
+  Navigation,
   Truck,
   PieChart,
   RotateCcw,
@@ -23,8 +24,9 @@ const NAV_ITEMS: Array<{
   badgeKey?: WorkflowDepartment;
 }> = [
   { id: 'production', label: 'بخش تولید', icon: Factory, badgeKey: 'production' },
-  { id: 'finance', label: 'بخش مالی', icon: FileSpreadsheet, badgeKey: 'finance' },
+  { id: 'finance', label: 'بخش صدور فاکتور', icon: FileSpreadsheet, badgeKey: 'finance' },
   { id: 'shipping', label: 'بخش ارسال', icon: Truck, badgeKey: 'shipping' },
+  { id: 'driver', label: 'پنل رانندگان', icon: Navigation },
   { id: 'reports', label: 'گزارش‌ها و آمار', icon: PieChart },
 ];
 

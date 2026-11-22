@@ -5,11 +5,13 @@ import {
   ToastNotification,
   ToastType,
   UnreadNotification,
+  UploadedDocumentPhoto,
   WorkflowDepartment,
 } from '../types/order';
 import { formatTimeStamp } from '../utils/formatters';
+import { DEFAULT_SELECTED_DATE_KEY } from '../utils/jalaliCalendar';
 
-const STORAGE_KEY = 'order_workflow_ts_state_v2';
+const STORAGE_KEY = 'order_workflow_ts_state_v4';
 
 interface PersistedState {
   orders: Order[];
@@ -17,21 +19,29 @@ interface PersistedState {
 }
 
 function normalizeOrders(orders: Order[]): Order[] {
-  return orders.map((order) => {
-    if (order.returnRecord && !order.returnRecord.confirmations) {
-      return {
-        ...order,
-        returnRecord: {
-          ...order.returnRecord,
-          confirmations: {
-            production: { confirmed: false },
-            finance: { confirmed: false },
-            shipping: { confirmed: false },
-          },
+  return orders.map((order, idx) => {
+    const normalized: Order = {
+      ...order,
+      district: order.district || 'محدوده تهران',
+      routeOrder: typeof order.routeOrder === 'number' ? order.routeOrder : idx + 1,
+      deliveryDate: order.deliveryDate || DEFAULT_SELECTED_DATE_KEY,
+      seenByDept: order.seenByDept ?? {
+        production: true,
+        finance: true,
+        shipping: true,
+      },
+    };
+    if (normalized.returnRecord && !normalized.returnRecord.confirmations) {
+      normalized.returnRecord = {
+        ...normalized.returnRecord,
+        confirmations: {
+          production: { confirmed: false },
+          finance: { confirmed: false },
+          shipping: { confirmed: false },
         },
       };
     }
-    return order;
+    return normalized;
   });
 }
 
@@ -129,7 +139,31 @@ export function useOrderStore() {
     [pushToast]
   );
 
-  // 1. Production: approve order for weighing (moves to top priority in production)
+  // Mark all orders on a given date as seen for a specific department
+  const markDateSeenByDept = useCallback(
+    (dateKey: string, dept: WorkflowDepartment) => {
+      setOrders((prev) => {
+        let changed = false;
+        const next = prev.map((order) => {
+          if (order.deliveryDate === dateKey && !order.seenByDept[dept]) {
+            changed = true;
+            return {
+              ...order,
+              seenByDept: {
+                ...order.seenByDept,
+                [dept]: true,
+              },
+            };
+          }
+          return order;
+        });
+        return changed ? next : prev;
+      });
+    },
+    []
+  );
+
+  // 1. Production: approve order for weighing
   const approveProductionOrder = useCallback((orderId: string) => {
     const now = Date.now();
     setOrders((prev) =>
@@ -161,7 +195,7 @@ export function useOrderStore() {
     []
   );
 
-  // 3. Production: complete production and unlock Finance
+  // 3. Production: complete production and unlock Invoice Issuance
   const completeProduction = useCallback(
     (orderId: string) => {
       const target = orders.find((o) => o.id === orderId);
@@ -177,14 +211,14 @@ export function useOrderStore() {
       );
 
       const title = `اتمام تولید — سفارش ${target.code}`;
-      const message = `تولید و توزین سفارش ${target.code} تکمیل شد و جهت بررسی و تایید حسابداری در بالای صف بخش مالی قرار گرفت.`;
-      pushToast(title, message, 'ارسال به بخش مالی', 'success');
+      const message = `تولید و توزین سفارش ${target.code} تکمیل شد و جهت بررسی و صدور فاکتور در بالای صف بخش صدور فاکتور قرار گرفت.`;
+      pushToast(title, message, 'ارسال به بخش صدور فاکتور', 'success');
       queueDeptNotification('finance', title, message, 'info');
     },
     [orders, pushToast, queueDeptNotification]
   );
 
-  // 4. Finance: approve (or re-approve after discrepancy) and unlock Shipping
+  // 4. Invoice Issuance: approve (or re-approve after discrepancy) and unlock Shipping
   const approveFinance = useCallback(
     (orderId: string) => {
       const target = orders.find((o) => o.id === orderId);
@@ -203,10 +237,10 @@ export function useOrderStore() {
 
       const title = wasDiscrepancy
         ? `تایید مجدد فاکتور اصلاحی — سفارش ${target.code}`
-        : `تایید مالی — سفارش ${target.code}`;
+        : `صدور فاکتور تایید شد — سفارش ${target.code}`;
       const message = wasDiscrepancy
-        ? `فاکتور اصلاحی سفارش ${target.code} توسط واحد مالی تایید شد و در بالای صف بخش ارسال قرار گرفت.`
-        : `سفارش ${target.code} توسط واحد مالی تایید شد و در بالای صف تخصیص راننده بخش ارسال قرار گرفت.`;
+        ? `فاکتور اصلاحی سفارش ${target.code} توسط بخش صدور فاکتور تایید شد و در بالای صف بخش ارسال قرار گرفت.`
+        : `فاکتور سفارش ${target.code} صادر و تایید شد و در بالای صف تخصیص راننده بخش ارسال قرار گرفت.`;
 
       pushToast(title, message, 'ارسال به بخش ارسال', 'success');
       queueDeptNotification('shipping', title, message, 'info');
@@ -223,7 +257,7 @@ export function useOrderStore() {
     );
   }, []);
 
-  // 6. Shipping: submit weight discrepancy back to Finance
+  // 6. Shipping: submit weight discrepancy back to Invoice Issuance
   const submitDiscrepancy = useCallback(
     (
       orderId: string,
@@ -273,8 +307,8 @@ export function useOrderStore() {
       );
 
       const title = `ارجاع مغایرت وزن — سفارش ${target.code}`;
-      const message = `واحد ارسال مغایرت وزن سفارش ${target.code} را ثبت و جهت بررسی فوری به بالای صف واحد مالی ارجاع داد. توضیحات: ${note}`;
-      pushToast(title, message, 'ارجاع به بخش مالی انجام شد', 'warning');
+      const message = `واحد ارسال مغایرت وزن سفارش ${target.code} را ثبت و جهت بررسی فوری به بالای صف بخش صدور فاکتور ارجاع داد. توضیحات: ${note}`;
+      pushToast(title, message, 'ارجاع به بخش صدور فاکتور انجام شد', 'warning');
       queueDeptNotification('finance', title, message, 'warning');
     },
     [orders, pushToast, queueDeptNotification]
@@ -316,7 +350,7 @@ export function useOrderStore() {
     [orders, pushToast]
   );
 
-  // 8. Shipping: register returned items and notify ALL departments to confirm & resolve
+  // 8. Shipping: register returned items and notify ALL departments
   const submitReturn = useCallback(
     (
       orderId: string,
@@ -369,7 +403,7 @@ export function useOrderStore() {
 
       const title = `اعلام مرجوعی سفارش ${target.code}`;
       const message = `سفارش ${target.code} توسط بخش ارسال مرجوع شد و جهت تعیین‌تکلیف و تایید مرجوعی به تمامی واحدها اعلام گردید. علت: ${notes}`;
-      pushToast(title, message, 'اعلام به تمام واحدها (تولید، مالی، ارسال)', 'danger');
+      pushToast(title, message, 'اعلام به تمام واحدها (تولید، صدور فاکتور، ارسال)', 'danger');
       queueDeptNotification('production', title, message, 'danger');
       queueDeptNotification('finance', title, message, 'danger');
     },
@@ -444,7 +478,7 @@ export function useOrderStore() {
     [orders, pushToast, queueDeptNotification]
   );
 
-  // 10. Reject order from Production or Finance (syncs across all departments)
+  // 10. Reject order from Production or Invoice Issuance
   const rejectOrder = useCallback(
     (orderId: string, source: WorkflowDepartment, reason: string) => {
       const target = orders.find((o) => o.id === orderId);
@@ -485,7 +519,161 @@ export function useOrderStore() {
     [orders, pushToast, queueDeptNotification]
   );
 
-  // 11. Reset demo dataset
+  // 11. Driver: reorder route priority for a list of order IDs
+  const reorderDriverOrders = useCallback((orderedIds: string[]) => {
+    const rankMap = new Map<string, number>();
+    orderedIds.forEach((id, index) => {
+      rankMap.set(id, index + 1);
+    });
+
+    setOrders((prev) =>
+      prev.map((order) => {
+        const nextRank = rankMap.get(order.id);
+        if (nextRank === undefined || order.routeOrder === nextRank) {
+          return order;
+        }
+        return { ...order, routeOrder: nextRank };
+      })
+    );
+  }, []);
+
+  // 12. Driver: upload invoice or payment receipt photo
+  const uploadDriverDocument = useCallback(
+    (
+      orderId: string,
+      docType: 'invoice' | 'paymentReceipt',
+      photo: UploadedDocumentPhoto
+    ) => {
+      const target = orders.find((o) => o.id === orderId);
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          const existing = order.driverDelivery ?? { sentToFinance: false };
+          return {
+            ...order,
+            driverDelivery: {
+              ...existing,
+              ...(docType === 'invoice'
+                ? { invoicePhoto: photo }
+                : { paymentReceiptPhoto: photo }),
+            },
+          };
+        })
+      );
+
+      if (target) {
+        const label = docType === 'invoice' ? 'عکس فاکتور' : 'عکس رسید پرداخت';
+        pushToast(
+          `${label} ثبت شد`,
+          `${label} سفارش ${target.code} با موفقیت بارگذاری شد.`,
+          'پنل رانندگان',
+          'success'
+        );
+      }
+    },
+    [orders, pushToast]
+  );
+
+  // 13. Driver: remove uploaded photo before final completion
+  const removeDriverDocument = useCallback(
+    (orderId: string, docType: 'invoice' | 'paymentReceipt') => {
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId || !order.driverDelivery) return order;
+          if (order.driverDelivery.sentToFinance) return order;
+          const nextRecord = { ...order.driverDelivery };
+          if (docType === 'invoice') {
+            delete nextRecord.invoicePhoto;
+          } else {
+            delete nextRecord.paymentReceiptPhoto;
+          }
+          return {
+            ...order,
+            driverDelivery: nextRecord,
+          };
+        })
+      );
+    },
+    []
+  );
+
+  // 14. Driver: complete delivery once both photos are uploaded and send to Invoice Issuance
+  const completeDriverDelivery = useCallback(
+    (orderId: string) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target) return;
+      if (
+        !target.driverDelivery?.invoicePhoto ||
+        !target.driverDelivery?.paymentReceiptPhoto
+      ) {
+        pushToast(
+          'مدارک تحویل کامل نیست',
+          'برای اتمام تحویل، لطفاً هم عکس فاکتور و هم عکس رسید پرداخت را آپلود کنید.',
+          'پنل رانندگان',
+          'warning'
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          return {
+            ...order,
+            lastActionAt: now,
+            driverDelivery: {
+              ...order.driverDelivery!,
+              completedAt: stamp,
+              sentToFinance: true,
+              financeVerified: false,
+            },
+          };
+        })
+      );
+
+      const title = `اتمام تحویل و ارسال مدارک — سفارش ${target.code}`;
+      const message = `عکس فاکتور و رسید پرداخت سفارش ${target.code} (${target.district}) توسط راننده ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`;
+      pushToast(title, message, 'ارسال به بخش صدور فاکتور', 'success');
+      queueDeptNotification('finance', title, message, 'success');
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 15. Invoice Issuance: verify driver-submitted delivery photos
+  const verifyDriverDocumentsInFinance = useCallback(
+    (orderId: string) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target || !target.driverDelivery?.sentToFinance) return;
+
+      const stamp = formatTimeStamp();
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId || !order.driverDelivery) return order;
+          return {
+            ...order,
+            driverDelivery: {
+              ...order.driverDelivery,
+              financeVerified: true,
+              financeVerifiedAt: stamp,
+            },
+          };
+        })
+      );
+
+      pushToast(
+        `مدارک تحویل تایید شد — سفارش ${target.code}`,
+        `عکس فاکتور و رسید پرداخت ارسال‌شده توسط راننده برای سفارش ${target.code} در بخش صدور فاکتور تایید نهایی شد.`,
+        'بخش صدور فاکتور',
+        'success'
+      );
+    },
+    [orders, pushToast]
+  );
+
+  // 16. Reset demo dataset
   const resetDemoData = useCallback(() => {
     setOrders(INITIAL_ORDERS);
     setUnreadByDept({ production: [], finance: [], shipping: [] });
@@ -505,6 +693,7 @@ export function useOrderStore() {
     dismissToast,
     pushToast,
     flushDeptNotifications,
+    markDateSeenByDept,
     approveProductionOrder,
     recordItemWeight,
     completeProduction,
@@ -515,6 +704,11 @@ export function useOrderStore() {
     submitReturn,
     confirmReturnByDepartment,
     rejectOrder,
+    reorderDriverOrders,
+    uploadDriverDocument,
+    removeDriverDocument,
+    completeDriverDelivery,
+    verifyDriverDocumentsInFinance,
     resetDemoData,
   };
 }

@@ -130,7 +130,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) 
         </div>
 
         <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs text-slate-500 mb-1.5">ارزش فاکتورهای تایید مالی</div>
+          <div className="text-xs text-slate-500 mb-1.5">ارزش فاکتورهای صادرشده</div>
           <div className="tabular-nums text-xl font-bold text-emerald-700 leading-8">
             {formatRial(stats.approvedRevenue)}
           </div>

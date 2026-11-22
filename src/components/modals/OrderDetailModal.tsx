@@ -1,12 +1,14 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   Ban,
+  Camera,
   Check,
   CheckCheck,
   CheckCircle2,
   Clock,
   Edit3,
+  Eye,
   Lock,
   MapPin,
   Phone,
@@ -19,7 +21,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { DEPARTMENT_LABELS, DRIVERS } from '../../data/initialOrders';
-import { Order, OrderItem, WorkflowDepartment } from '../../types/order';
+import {
+  Order,
+  OrderItem,
+  UploadedDocumentPhoto,
+  WorkflowDepartment,
+} from '../../types/order';
 import {
   calculateItemTotal,
   calculateOrderTotal,
@@ -43,6 +50,7 @@ interface OrderDetailModalProps {
   onCompleteProduction: (orderId: string) => void;
   // Finance actions
   onApproveFinance: (orderId: string) => void;
+  onVerifyDriverDocuments: (orderId: string) => void;
   onCallCustomer: (order: Order) => void;
   // Shipping actions
   onSelectDriver: (orderId: string, driverName: string) => void;
@@ -65,6 +73,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onOpenWeight,
   onCompleteProduction,
   onApproveFinance,
+  onVerifyDriverDocuments,
   onCallCustomer,
   onSelectDriver,
   onOpenDiscrepancy,
@@ -74,14 +83,29 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onOpenReject,
   onConfirmReturn,
 }) => {
+  const [zoomedDoc, setZoomedDoc] = useState<{
+    title: string;
+    photo: UploadedDocumentPhoto;
+  } | null>(null);
+
+  useEffect(() => {
+    setZoomedDoc(null);
+  }, [order?.id]);
+
   useEffect(() => {
     if (!order || disableEscape) return;
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (zoomedDoc) {
+          setZoomedDoc(null);
+        } else {
+          onClose();
+        }
+      }
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [order, disableEscape, onClose]);
+  }, [order, disableEscape, zoomedDoc, onClose]);
 
   if (!order) return null;
 
@@ -126,14 +150,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
     }
     if (returned) {
       return order.returnRecord?.confirmations.finance.confirmed
-        ? { text: 'مرجوعی تایید شده (مالی)', className: 'text-emerald-700' }
-        : { text: 'مرجوع شده — در انتظار تایید مالی', className: 'text-red-700' };
+        ? { text: 'مرجوعی تایید شده (صدور فاکتور)', className: 'text-emerald-700' }
+        : { text: 'مرجوع شده — در انتظار تایید صدور فاکتور', className: 'text-red-700' };
     }
     if (discrepancy) {
       return { text: 'در انتظار تایید مجدد (اصلاح وزن)', className: 'text-amber-700' };
     }
     if (readyForFinance) {
-      return { text: 'در انتظار تایید مالی', className: 'text-[#0f5864]' };
+      return { text: 'در انتظار صدور فاکتور', className: 'text-[#0f5864]' };
     }
     if (financeApproved) {
       return { text: 'تایید شده', className: 'text-emerald-700' };
@@ -181,7 +205,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           <div className="px-5 py-2 bg-amber-600 text-white flex items-center justify-between gap-2 text-xs font-bold shrink-0">
             <span className="inline-flex items-center gap-2">
               <Scale className="w-3.5 h-3.5 shrink-0" />
-              اولویت فوری مالی — ارجاع مغایرت وزن از ارسال (نیازمند تایید مجدد)
+              اولویت فوری صدور فاکتور — ارجاع مغایرت وزن از ارسال (نیازمند تایید مجدد)
             </span>
             <span className="tabular-nums opacity-95">کد {order.code}</span>
           </div>
@@ -191,7 +215,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           <div className="px-5 py-2 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold shrink-0">
             <span className="inline-flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 shrink-0" />
-              آماده اقدام واحد مالی — تایید حسابداری
+              آماده اقدام بخش صدور فاکتور — بررسی و صدور فاکتور
             </span>
             <span className="tabular-nums opacity-95 font-medium">
               مبلغ: {formatRial(orderTotal)}
@@ -203,7 +227,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           <div className="px-5 py-2 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold shrink-0">
             <span className="inline-flex items-center gap-2">
               <Zap className="w-3.5 h-3.5 shrink-0" />
-              اولویت ارسال — تاییدشده توسط مالی، آماده تخصیص راننده
+              اولویت ارسال — تاییدشده توسط بخش صدور فاکتور، آماده تخصیص راننده
             </span>
             <span className="opacity-95 font-medium">بازه ارسال: {order.deliverySlot}</span>
           </div>
@@ -241,7 +265,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   <span className="font-bold text-slate-900">{order.customerName}</span>
                 </div>
                 <div className="text-[13px]">
-                  <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت مالی</span>
+                  <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت صدور فاکتور</span>
                   <span className={`font-bold ${financeStatus.className}`}>
                     {financeStatus.text}
                   </span>
@@ -523,6 +547,110 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
           </div>
 
+          {/* Driver-Submitted Delivery Photos in Invoice Issuance */}
+          {department === 'finance' && order.driverDelivery?.sentToFinance && (
+            <div className="px-5 py-4 bg-emerald-50/50 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-[13px] font-bold text-emerald-950 inline-flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-emerald-700" />
+                    مدارک تحویل ارسال‌شده توسط راننده
+                  </h4>
+                  <p className="text-xs text-emerald-800/85 mt-0.5">
+                    زمان ارسال از پنل رانندگان: {order.driverDelivery.completedAt}
+                    {order.driverName ? ` · راننده: ${order.driverName}` : ''}
+                  </p>
+                </div>
+
+                {order.driverDelivery.financeVerified ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    تایید شده توسط صدور فاکتور ({order.driverDelivery.financeVerifiedAt})
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onVerifyDriverDocuments(order.id)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                  >
+                    <CheckCheck className="w-4 h-4" />
+                    تایید دریافت مدارک تحویل
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {order.driverDelivery.invoicePhoto && (
+                  <div className="bg-white border border-emerald-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <strong className="text-slate-800">عکس فاکتور</strong>
+                      <span className="tabular-nums text-[11px] text-slate-500">
+                        {order.driverDelivery.invoicePhoto.uploadedAt}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setZoomedDoc({
+                          title: `عکس فاکتور سفارش ${order.code}`,
+                          photo: order.driverDelivery!.invoicePhoto!,
+                        })
+                      }
+                      className="group relative block w-full h-36 rounded-md overflow-hidden border border-slate-200 bg-slate-100"
+                    >
+                      <img
+                        src={order.driverDelivery.invoicePhoto.dataUrl}
+                        alt={`عکس فاکتور سفارش ${order.code}`}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/35 transition-colors flex items-center justify-center">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white text-slate-900 text-xs font-semibold">
+                          <Eye className="w-3.5 h-3.5" />
+                          مشاهده بزرگ
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+
+                {order.driverDelivery.paymentReceiptPhoto && (
+                  <div className="bg-white border border-emerald-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <strong className="text-slate-800">عکس رسید پرداخت</strong>
+                      <span className="tabular-nums text-[11px] text-slate-500">
+                        {order.driverDelivery.paymentReceiptPhoto.uploadedAt}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setZoomedDoc({
+                          title: `عکس رسید پرداخت سفارش ${order.code}`,
+                          photo: order.driverDelivery!.paymentReceiptPhoto!,
+                        })
+                      }
+                      className="group relative block w-full h-36 rounded-md overflow-hidden border border-slate-200 bg-slate-100"
+                    >
+                      <img
+                        src={order.driverDelivery.paymentReceiptPhoto.dataUrl}
+                        alt={`عکس رسید پرداخت سفارش ${order.code}`}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/35 transition-colors flex items-center justify-center">
+                        <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1 px-2.5 py-1 rounded bg-white text-slate-900 text-xs font-semibold">
+                          <Eye className="w-3.5 h-3.5" />
+                          مشاهده بزرگ
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Return Resolution Box (shared across all 3 departments when returned) */}
           {returned && order.returnRecord && (
             <ReturnResolutionBox
@@ -559,7 +687,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 : inProduction && !allItemsWeighed
                   ? `لطفاً وزن تمام اقلام را ثبت کنید (${weighedCount} از ${order.items.length}).`
                   : allItemsWeighed
-                    ? 'تمامی اقلام توزین شده‌اند؛ آماده ارسال به بخش مالی.'
+                    ? 'تمامی اقلام توزین شده‌اند؛ آماده ارسال به بخش صدور فاکتور.'
                     : ''}
             </span>
 
@@ -603,14 +731,14 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors whitespace-nowrap"
                 >
                   <CheckCheck className="w-4 h-4" />
-                  اتمام تولید و ارسال به مالی
+                  اتمام تولید و ارسال به صدور فاکتور
                 </button>
               )}
 
               {prodCompleted && (
                 <span className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-slate-600 text-white rounded-md whitespace-nowrap">
                   <CheckCheck className="w-4 h-4" />
-                  تولید تکمیل و به مالی ارسال شد
+                  تولید تکمیل و به صدور فاکتور ارسال شد
                 </span>
               )}
 
@@ -669,7 +797,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     {financeCanAct ? (
                       <>
                         <Stamp className="w-4 h-4" />
-                        {discrepancy ? 'تایید مجدد فاکتور اصلاحی' : 'تایید حسابداری'}
+                        {discrepancy ? 'تایید مجدد فاکتور اصلاحی' : 'تایید و صدور فاکتور'}
                       </>
                     ) : (
                       <>
@@ -701,7 +829,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               <div className="px-5 py-3.5 bg-amber-50 text-amber-900 border-t border-amber-200 text-[13px] font-bold flex items-center gap-2 shrink-0">
                 <Clock className="w-4 h-4 shrink-0" />
                 <span>
-                  مغایرت وزن ثبت شد و سفارش جهت بررسی و تایید مجدد فاکتور به واحد مالی ارجاع گردید.
+                  مغایرت وزن ثبت شد و سفارش جهت بررسی و تایید مجدد فاکتور به واحد صدور فاکتور ارجاع گردید.
                 </span>
               </div>
             )}
@@ -712,7 +840,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               <div className="px-5 py-3.5 bg-amber-50/90 text-amber-900 border-t border-amber-200 text-[13px] font-semibold flex items-center gap-2 shrink-0">
                 <Lock className="w-4 h-4 shrink-0" />
                 <span>
-                  این سفارش در انتظار تایید نهایی توسط واحد مالی است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.
+                  این سفارش در انتظار تایید نهایی توسط واحد صدور فاکتور است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.
                 </span>
               </div>
             )}
@@ -748,7 +876,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-500 hover:text-white transition-colors whitespace-nowrap"
                   >
                     <Scale className="w-4 h-4" />
-                    مغایرت وزن / ارجاع به مالی
+                    مغایرت وزن / ارجاع به صدور فاکتور
                   </button>
 
                   <button
@@ -793,6 +921,44 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           </>
         )}
       </div>
+
+      {/* Fullscreen Zoom Viewer for Driver Photos in Finance */}
+      {zoomedDoc && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={zoomedDoc.title}
+          className="no-print fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setZoomedDoc(null)}
+        >
+          <div
+            className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+              <span className="text-xs font-bold text-slate-900">
+                {zoomedDoc.title}
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomedDoc(null)}
+                aria-label="بستن پیش‌نمایش"
+                className="p-1 text-slate-500 hover:text-slate-900 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-4 bg-slate-900 flex items-center justify-center overflow-auto">
+              <img
+                src={zoomedDoc.photo.dataUrl}
+                alt={zoomedDoc.title}
+                referrerPolicy="no-referrer"
+                className="max-h-[75vh] w-auto object-contain rounded"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

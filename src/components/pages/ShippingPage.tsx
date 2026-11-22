@@ -70,9 +70,9 @@ function getShippingStatusDisplay(order: Order): { label: string; className: str
     return { label: 'آماده تخصیص راننده و خروج', className: 'text-[#0f5864]' };
   }
   if (order.status === 'finance_discrepancy_review') {
-    return { label: 'ارجاع به مالی (مغایرت وزن)', className: 'text-amber-700' };
+    return { label: 'ارجاع به صدور فاکتور (مغایرت وزن)', className: 'text-amber-700' };
   }
-  return { label: 'در انتظار تایید واحد مالی', className: 'text-slate-500' };
+  return { label: 'در انتظار تایید واحد صدور فاکتور', className: 'text-slate-500' };
 }
 
 export const ShippingPage: React.FC<ShippingPageProps> = ({
@@ -158,7 +158,7 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
             [
               { id: 'all', label: 'همه' },
               { id: 'ready', label: 'آماده ارسال' },
-              { id: 'locked', label: 'در انتظار مالی' },
+              { id: 'locked', label: 'در انتظار صدور فاکتور' },
               { id: 'delivered', label: 'تحویل شده' },
               { id: 'returned', label: 'مرجوعی' },
               { id: 'rejected', label: 'رد شده' },
@@ -185,18 +185,22 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
         {sortedAndFilteredOrders.length === 0 ? (
           <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
             <p className="text-sm font-medium text-slate-600 mb-3">
-              سفارشی در این بخش یافت نشد.
+              {orders.length === 0
+                ? 'در این تاریخ سفارشی برای ارسال ثبت نشده است.'
+                : 'سفارشی در این بخش یافت نشد.'}
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setSearchQuery('');
-                setFilter('all');
-              }}
-              className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
-            >
-              نمایش همه سفارش‌ها
-            </button>
+            {orders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setFilter('all');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
+              >
+                نمایش همه سفارش‌ها
+              </button>
+            )}
           </div>
         ) : (
           sortedAndFilteredOrders.map((order, index) => {
@@ -262,7 +266,7 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
                       <div className="no-print px-5 py-1.5 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-2">
                           <Zap className="w-3.5 h-3.5 shrink-0" />
-                          اولویت ارسال — تاییدشده توسط مالی، آماده تخصیص راننده و خروج
+                          اولویت ارسال — تاییدشده توسط بخش صدور فاکتور، آماده تخصیص راننده و خروج
                         </span>
                         <span className="opacity-95 text-[11px]">کلیک برای تخصیص راننده</span>
                       </div>

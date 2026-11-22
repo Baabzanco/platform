@@ -51,9 +51,9 @@ export function getStatusLabel(status: OrderStatus): string {
     case 'in_production':
       return 'در حال تولید و توزین';
     case 'pending_finance_approval':
-      return 'در انتظار تایید مالی';
+      return 'در انتظار صدور فاکتور';
     case 'finance_discrepancy_review':
-      return 'بررسی مجدد مالی (مغایرت وزن)';
+      return 'بررسی مجدد صدور فاکتور (مغایرت وزن)';
     case 'pending_shipping':
       return 'آماده تخصیص راننده';
     case 'delivered':

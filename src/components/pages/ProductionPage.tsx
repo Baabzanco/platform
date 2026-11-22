@@ -75,7 +75,7 @@ function getProductionStatusDisplay(order: Order): { label: string; className: s
     };
   }
   if (isCompletedInProd(order)) {
-    return { label: 'تولید تکمیل و ارسال به مالی', className: 'text-emerald-700' };
+    return { label: 'تولید تکمیل و ارسال به صدور فاکتور', className: 'text-emerald-700' };
   }
   return { label: 'در انتظار تایید تولید', className: 'text-slate-600' };
 }
@@ -209,7 +209,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                   { id: 'all', label: 'همه' },
                   { id: 'in_progress', label: 'در حال توزین' },
                   { id: 'pending', label: 'در انتظار تایید' },
-                  { id: 'completed', label: 'ارسال به مالی' },
+                  { id: 'completed', label: 'ارسال به صدور فاکتور' },
                   { id: 'returned', label: 'مرجوعی' },
                   { id: 'rejected', label: 'رد شده' },
                 ] as Array<{ id: ProdFilter; label: string }>
@@ -238,18 +238,22 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
           {sortedAndFilteredOrders.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
               <p className="text-sm font-medium text-slate-600 mb-3">
-                هیچ سفارشی با فیلتر انتخاب‌شده یافت نشد.
+                {orders.length === 0
+                  ? 'در این تاریخ هیچ سفارشی ثبت نشده است.'
+                  : 'هیچ سفارشی با فیلتر انتخاب‌شده یافت نشد.'}
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('');
-                  setStatusFilter('all');
-                }}
-                className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
-              >
-                نمایش همه سفارش‌ها
-              </button>
+              {orders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery('');
+                    setStatusFilter('all');
+                  }}
+                  className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
+                >
+                  نمایش همه سفارش‌ها
+                </button>
+              )}
             </div>
           ) : (
             sortedAndFilteredOrders.map((order, index) => {

@@ -1,6 +1,6 @@
 {
   "name": "سامانه مدیریت سفارشات",
-  "description": "داشبورد داینامیک مدیریت چرخه سفارشات شامل بخش‌های تولید، مالی، ارسال و گزارش‌گیری با TypeScript",
+  "description": "داشبورد داینامیک مدیریت چرخه سفارشات شامل بخش‌های تولید، صدور فاکتور، ارسال و گزارش‌گیری با TypeScript",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
