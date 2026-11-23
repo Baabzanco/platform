@@ -8,11 +8,24 @@ export type CustomerProfileTab =
   | 'basic'
   | 'specialized'
   | 'events'
+  | 'accounting'
   | 'menu_images'
   | 'marketer'
   | 'products'
   | 'calls'
   | 'messages';
+
+export type AccountingRowKind = 'debit' | 'credit' | 'balance';
+
+export interface CustomerAccountingEntry {
+  id: string;
+  date: string;
+  title: string;
+  debitRial: number;
+  creditRial: number;
+  runningBalanceRial: number;
+  kind: AccountingRowKind;
+}
 
 export interface CustomerContact {
   id: string;

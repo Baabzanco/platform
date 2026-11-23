@@ -9,6 +9,7 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock,
+  FileSpreadsheet,
   FileText,
   Image as ImageIcon,
   Info,
@@ -37,6 +38,7 @@ import {
   SALES_REPS,
   STANDING_TIER_STYLES,
 } from '../../data/initialCustomers';
+import { getCustomerAccountingEntries } from '../../data/customerAccountingData';
 import { buildFinancialStatusLabel } from '../../hooks/useCustomerStore';
 import {
   CustomerCallItem,
@@ -94,6 +96,7 @@ const PROFILE_TABS: Array<{
   { id: 'basic', label: 'اطلاعات پایه', icon: Info },
   { id: 'specialized', label: 'اطلاعات تخصصی', icon: SlidersHorizontal },
   { id: 'events', label: 'رخداد مشتری', icon: CalendarClock },
+  { id: 'accounting', label: 'رخداد حسابداری', icon: FileSpreadsheet },
   { id: 'menu_images', label: 'تصاویر منو', icon: ImageIcon },
   { id: 'marketer', label: 'بازاریاب', icon: Briefcase },
   { id: 'products', label: 'محصولات', icon: Package },
@@ -246,6 +249,25 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
     0,
     customer.credit.creditLimitRial - customer.credit.usedCreditRial
   );
+
+  const accountingEntries = useMemo(
+    () => getCustomerAccountingEntries(customer),
+    [customer]
+  );
+
+  const accountingTotals = useMemo(() => {
+    let totalDebit = 0;
+    let totalCredit = 0;
+    for (const row of accountingEntries) {
+      totalDebit += row.debitRial;
+      totalCredit += row.creditRial;
+    }
+    const finalBalance =
+      accountingEntries.length > 0
+        ? accountingEntries[accountingEntries.length - 1].runningBalanceRial
+        : 0;
+    return { totalDebit, totalCredit, finalBalance };
+  }, [accountingEntries]);
 
   const quickSearchMatches = useMemo(() => {
     const q = quickSearch.trim().toLowerCase();
@@ -1306,6 +1328,186 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                   ))}
                 </div>
               )}
+            </section>
+          )}
+
+          {/* TAB 3B: رخداد حسابداری (Read-Only Excel-Style Ledger) */}
+          {activeTab === 'accounting' && (
+            <section className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
+              {/* Top Excel Toolbar Header */}
+              <div className="px-4 py-3 bg-[#f3f6f4] border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 text-xs">
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-700 shrink-0" />
+                  <h2 className="text-sm font-bold text-slate-900">
+                    رخداد حسابداری (دفتر معین طرف حساب)
+                  </h2>
+                  <span className="text-[11px] text-slate-500">
+                    · فقط نمایش (غیرقابل ویرایش)
+                  </span>
+                </div>
+              </div>
+
+              {/* Compact Summary Formula Bar */}
+              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs tabular-nums">
+                <div className="flex items-center justify-between sm:justify-start sm:gap-2">
+                  <span className="text-slate-500">جمع بدهکار:</span>
+                  <strong className="text-red-700">
+                    {formatRial(accountingTotals.totalDebit)}
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between sm:justify-start sm:gap-2">
+                  <span className="text-slate-500">جمع بستانکار:</span>
+                  <strong className="text-emerald-700">
+                    {formatRial(accountingTotals.totalCredit)}
+                  </strong>
+                </div>
+                <div className="flex items-center justify-between sm:justify-start sm:gap-2">
+                  <span className="text-slate-500">مانده نهایی بر خط:</span>
+                  <strong
+                    className={
+                      accountingTotals.finalBalance > 0
+                        ? 'text-slate-950'
+                        : 'text-emerald-700'
+                    }
+                  >
+                    {accountingTotals.finalBalance === 0
+                      ? '۰ ریال (تسویه)'
+                      : formatRial(accountingTotals.finalBalance)}
+                  </strong>
+                </div>
+              </div>
+
+              {/* Excel-Style Grid Table (Strict Read-Only) */}
+              <div className="overflow-x-auto select-text">
+                <table className="w-full min-w-[680px] border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-[#e8eeea] text-slate-800 font-bold">
+                      <th className="w-11 px-2.5 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                        #
+                      </th>
+                      <th className="w-28 px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                        تاریخ
+                      </th>
+                      <th className="px-3.5 py-2.5 text-right border-b border-l border-slate-300">
+                        عنوان
+                      </th>
+                      <th className="w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
+                        بدهکار (ریال)
+                      </th>
+                      <th className="w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
+                        بستانکار (ریال)
+                      </th>
+                      <th className="w-40 px-3 py-2.5 text-left border-b border-slate-300 whitespace-nowrap">
+                        مانده بر خط (ریال)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accountingEntries.map((entry, idx) => {
+                      const isBalanceRow = entry.kind === 'balance';
+                      const isDebitRow = entry.kind === 'debit';
+                      const isCreditRow = entry.kind === 'credit';
+
+                      const rowBg = isBalanceRow
+                        ? 'bg-slate-100/90 font-bold'
+                        : idx % 2 === 0
+                          ? 'bg-white'
+                          : 'bg-slate-50/50';
+
+                      return (
+                        <tr
+                          key={entry.id}
+                          className={`${rowBg} hover:bg-sky-50/55 transition-colors`}
+                        >
+                          <td className="px-2.5 py-2.5 text-center tabular-nums text-slate-500 bg-slate-50/70 border-b border-l border-slate-300">
+                            {toPersianDigits(idx + 1)}
+                          </td>
+                          <td className="px-3 py-2.5 text-center tabular-nums text-slate-700 border-b border-l border-slate-300 whitespace-nowrap">
+                            {toPersianDigits(entry.date)}
+                          </td>
+                          <td
+                            className={`px-3.5 py-2.5 text-right border-b border-l border-slate-300 leading-relaxed ${
+                              isBalanceRow
+                                ? 'text-slate-900 font-bold'
+                                : 'text-slate-800 font-medium'
+                            }`}
+                          >
+                            {entry.title}
+                          </td>
+                          <td
+                            className={`px-3 py-2.5 text-left tabular-nums border-b border-l border-slate-300 whitespace-nowrap ${
+                              isDebitRow && entry.debitRial > 0
+                                ? 'text-red-700 font-bold bg-red-50/35'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {entry.debitRial > 0
+                              ? new Intl.NumberFormat('fa-IR').format(
+                                  entry.debitRial
+                                )
+                              : '—'}
+                          </td>
+                          <td
+                            className={`px-3 py-2.5 text-left tabular-nums border-b border-l border-slate-300 whitespace-nowrap ${
+                              isCreditRow && entry.creditRial > 0
+                                ? 'text-emerald-700 font-bold bg-emerald-50/40'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            {entry.creditRial > 0
+                              ? new Intl.NumberFormat('fa-IR').format(
+                                  entry.creditRial
+                                )
+                              : '—'}
+                          </td>
+                          <td
+                            className={`px-3 py-2.5 text-left tabular-nums border-b border-slate-300 whitespace-nowrap ${
+                              isBalanceRow
+                                ? entry.runningBalanceRial > 0
+                                  ? 'text-slate-950 font-bold bg-amber-50/70'
+                                  : 'text-emerald-800 font-bold bg-emerald-50/70'
+                                : 'text-slate-800 font-semibold'
+                            }`}
+                          >
+                            {entry.runningBalanceRial === 0
+                              ? '۰'
+                              : `${new Intl.NumberFormat('fa-IR').format(
+                                  Math.abs(entry.runningBalanceRial)
+                                )} ${entry.runningBalanceRial > 0 ? 'بد' : 'بس'}`}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-[#e8eeea] font-bold text-slate-900 tabular-nums">
+                      <td
+                        colSpan={3}
+                        className="px-3.5 py-3 text-right border-t-2 border-l border-slate-400"
+                      >
+                        جمع کل گردش و مانده نهایی
+                      </td>
+                      <td className="px-3 py-3 text-left text-red-800 border-t-2 border-l border-slate-400 whitespace-nowrap">
+                        {new Intl.NumberFormat('fa-IR').format(
+                          accountingTotals.totalDebit
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-left text-emerald-800 border-t-2 border-l border-slate-400 whitespace-nowrap">
+                        {new Intl.NumberFormat('fa-IR').format(
+                          accountingTotals.totalCredit
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-left text-slate-950 border-t-2 border-slate-400 whitespace-nowrap">
+                        {accountingTotals.finalBalance === 0
+                          ? '۰ (تسویه)'
+                          : `${new Intl.NumberFormat('fa-IR').format(
+                              Math.abs(accountingTotals.finalBalance)
+                            )} ${accountingTotals.finalBalance > 0 ? 'بد' : 'بس'}`}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </section>
           )}
 
