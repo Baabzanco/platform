@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Camera,
   CheckCheck,
   CheckCircle2,
@@ -15,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Order, UploadedDocumentPhoto } from '../../types/order';
+import { AccessControlHelpers } from '../../types/permissions';
 import { formatWeight, getShippingWeight } from '../../utils/formatters';
 import { processDocumentImageFile } from '../../utils/imageUpload';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
@@ -22,6 +24,7 @@ import { toPersianDigits } from '../../utils/jalaliCalendar';
 interface DriverOrderModalProps {
   order: Order | null;
   stopNumber: number;
+  access: AccessControlHelpers;
   onClose: () => void;
   onCallCustomer: (order: Order) => void;
   onUploadDocument: (
@@ -85,6 +88,18 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   const bothUploaded = Boolean(invoicePhoto && paymentReceiptPhoto);
   const completed = Boolean(order.driverDelivery?.sentToFinance);
   const financeVerified = Boolean(order.driverDelivery?.financeVerified);
+  const financeRejected = Boolean(
+    order.driverDelivery?.financeRejected && !completed
+  );
+  const needsInvoiceRetake = Boolean(
+    financeRejected && order.driverDelivery?.rejectedDocs?.invoice
+  );
+  const needsReceiptRetake = Boolean(
+    financeRejected && order.driverDelivery?.rejectedDocs?.paymentReceipt
+  );
+  const hasUnresolvedRejectedDoc = needsInvoiceRetake || needsReceiptRetake;
+  const readyToSubmit = bothUploaded && !hasUnresolvedRejectedDoc;
+
   const totalWeight = order.items.reduce(
     (sum, item) => sum + getShippingWeight(item),
     0
@@ -121,36 +136,65 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-label={`جزئیات تحویل سفارش ${order.code}`}
-        className="no-print fixed inset-0 z-40 bg-slate-900/55 backdrop-blur-[1.5px] flex items-center justify-center p-3 sm:p-5"
+        className="no-print fixed inset-0 z-40 bg-slate-900/55 backdrop-blur-[1.5px] flex items-end sm:items-center justify-center p-0 sm:p-5"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <div className="bg-white w-full max-w-[780px] rounded-xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="bg-white w-full max-w-[780px] rounded-t-2xl sm:rounded-xl border-t sm:border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[94dvh] sm:max-h-[92vh]">
+          {/* Mobile Drag Handle */}
+          <div className="sm:hidden pt-2 pb-1 flex justify-center bg-slate-50 shrink-0">
+            <span className="w-10 h-1.5 rounded-full bg-slate-300" />
+          </div>
+
           {/* Top Status Banner */}
+          {financeRejected && (
+            <div className="px-4 sm:px-5 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
+              <span className="inline-flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                مدارک توسط صدور فاکتور رد شد — لطفاً مجدد عکس بگیرید و ارسال کنید
+              </span>
+              {order.driverDelivery?.financeRejectedAt && (
+                <span className="tabular-nums opacity-95 text-[11px]">
+                  {order.driverDelivery.financeRejectedAt}
+                </span>
+              )}
+            </div>
+          )}
+
           {completed && (
-            <div className="px-5 py-2 bg-emerald-600 text-white flex items-center justify-between gap-2 text-xs font-bold shrink-0">
+            <div className="px-4 sm:px-5 py-2.5 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
               <span className="inline-flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 {financeVerified
                   ? 'تحویل تکمیل و مدارک توسط واحد صدور فاکتور تایید نهایی شد'
-                  : 'اتمام تحویل ثبت شد و مدارک برای واحد صدور فاکتور ارسال گردید'}
+                  : 'اتمام تحویل ثبت شد و مدارک به صدور فاکتور ارسال گردید'}
               </span>
-              <span className="tabular-nums opacity-95">
+              <span className="tabular-nums opacity-95 text-[11px]">
                 {order.driverDelivery?.completedAt}
               </span>
             </div>
           )}
 
           {/* Header */}
-          <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-start justify-between gap-4 shrink-0">
-            <div className="flex flex-wrap items-center gap-x-7 gap-y-2 flex-1">
+          <div
+            className={`px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 flex items-start justify-between gap-3 shrink-0 ${
+              financeRejected ? 'bg-red-50/70' : 'bg-slate-50'
+            }`}
+          >
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-x-6 gap-y-2 flex-1 min-w-0">
               <div className="text-[13px]">
                 <span className="block text-[11px] text-slate-500 mb-0.5">
                   اولویت مسیر
                 </span>
-                <span className="tabular-nums text-sm font-bold text-[#0f5864]">
-                  مسیر {toPersianDigits(stopNumber)}
+                <span
+                  className={`tabular-nums text-sm font-bold ${
+                    financeRejected ? 'text-red-700' : 'text-[#0f5864]'
+                  }`}
+                >
+                  {financeRejected
+                    ? 'اولویت فوری (عکس مجدد)'
+                    : `مسیر ${toPersianDigits(stopNumber)}`}
                 </span>
               </div>
 
@@ -158,16 +202,22 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 <span className="block text-[11px] text-slate-500 mb-0.5">
                   کد سفارش
                 </span>
-                <span className="tabular-nums text-base font-bold text-[#0056b3]">
+                <span
+                  className={`tabular-nums text-base font-bold ${
+                    financeRejected ? 'text-red-700' : 'text-[#0056b3]'
+                  }`}
+                >
                   {order.code}
                 </span>
               </div>
 
-              <div className="text-[13px]">
+              <div className="text-[13px] min-w-0">
                 <span className="block text-[11px] text-slate-500 mb-0.5">
                   محدوده
                 </span>
-                <span className="font-bold text-slate-900">{order.district}</span>
+                <span className="font-bold text-slate-900 block truncate">
+                  {order.district}
+                </span>
               </div>
 
               <div className="text-[13px]">
@@ -185,7 +235,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
               type="button"
               onClick={onClose}
               aria-label="بستن جزئیات تحویل"
-              className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-200/70 rounded-lg transition-colors shrink-0"
+              className="w-10 h-10 text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 rounded-xl flex items-center justify-center transition-colors shrink-0"
             >
               <X className="w-5 h-5" />
             </button>
@@ -193,26 +243,54 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
           {/* Scrollable Body */}
           <div className="overflow-y-auto flex-1 divide-y divide-slate-200">
-            {/* Address & Customer Call Section */}
-            <div className="px-5 py-4 bg-white space-y-3">
-              <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-3 text-[13px] text-slate-800">
+            {/* Red Rejection Reason Box */}
+            {financeRejected && order.driverDelivery?.financeRejectionReason && (
+              <div className="px-4 sm:px-5 py-3.5 bg-red-50 text-red-950">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-xs sm:text-[13px] leading-relaxed">
+                    <div className="font-bold text-red-800">
+                      علت رد مدارک توسط واحد صدور فاکتور:
+                    </div>
+                    <p className="font-semibold text-red-950">
+                      {order.driverDelivery.financeRejectionReason}
+                    </p>
+                    {hasUnresolvedRejectedDoc && (
+                      <p className="text-[11px] text-red-700 font-medium pt-0.5">
+                        مورد نیازمند عکاسی مجدد:{' '}
+                        {[
+                          needsInvoiceRetake ? 'عکس فاکتور' : null,
+                          needsReceiptRetake ? 'عکس رسید پرداخت' : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' و ')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Address & Direct Customer Call */}
+            <div className="px-4 sm:px-5 py-4 bg-white space-y-3">
+              <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-xs sm:text-[13px] text-slate-800">
                 <MapPin className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
                 <div>
                   <span className="block text-[11px] text-slate-500 mb-0.5">
                     آدرس دقیق تحویل ({order.district})
                   </span>
-                  <span className="font-medium leading-relaxed">
+                  <span className="font-semibold leading-relaxed">
                     {order.address}
                   </span>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-[#eef2f9]/65 border border-slate-200/80 rounded-lg px-3.5 py-2.5">
-                <div className="text-[13px]">
-                  <span className="text-slate-500 text-xs ml-2">تلفن مشتری:</span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-[#eef2f9]/70 border border-slate-200/80 rounded-xl px-3.5 py-3">
+                <div className="text-[13px] flex items-center justify-between sm:justify-start gap-2">
+                  <span className="text-slate-600 text-xs">تلفن مشتری:</span>
                   <span
                     dir="ltr"
-                    className="tabular-nums font-bold text-slate-900 inline-block"
+                    className="tabular-nums font-bold text-sm text-slate-900 inline-block"
                   >
                     {order.customerPhone}
                   </span>
@@ -221,29 +299,29 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 <a
                   href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`}
                   onClick={() => onCallCustomer(order)}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.99] transition-all whitespace-nowrap"
                 >
-                  <Phone className="w-3.5 h-3.5" />
-                  تماس با مشتری
+                  <Phone className="w-4 h-4" />
+                  تماس مستقیم با مشتری
                 </a>
               </div>
             </div>
 
             {/* Cargo Summary */}
-            <div className="px-5 py-3.5 bg-slate-50/50">
+            <div className="px-4 sm:px-5 py-3.5 bg-slate-50/50">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-slate-700 inline-flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5 text-[#0f5864]" />
+                  <Package className="w-4 h-4 text-[#0f5864]" />
                   اقلام سفارش جهت تحویل
                 </span>
-                <span className="tabular-nums text-xs text-slate-500">
+                <span className="tabular-nums text-xs text-slate-600">
                   {toPersianDigits(order.items.length)} قلم · جمع وزن:{' '}
-                  <strong className="text-slate-800">
+                  <strong className="text-slate-900">
                     {formatWeight(totalWeight)}
                   </strong>
                 </span>
               </div>
-              <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-slate-700">
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-700">
                 {order.items.map((item) => (
                   <span key={item.id} className="tabular-nums">
                     <strong className="text-slate-900">{item.productName}</strong>:{' '}
@@ -254,26 +332,28 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             </div>
 
             {/* Two Required Document Capture / Upload Slots */}
-            <div className="px-5 py-5 bg-white">
+            <div className="px-4 sm:px-5 py-4 sm:py-5 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">
                     ثبت و آپلود مدارک تحویل
                   </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    پس از عکس گرفتن و آپلود هر دو مدرک زیر، دکمه «اتمام تحویل» نمایش داده می‌شود.
+                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                    {financeRejected
+                      ? 'عکس موردنظر را با کیفیت و نور مناسب مجدداً ثبت کنید و سپس ارسال مجدد را بزنید.'
+                      : 'پس از عکس گرفتن از فاکتور و رسید پرداخت، دکمه «اتمام تحویل» فعال می‌شود.'}
                   </p>
                 </div>
                 <span className="tabular-nums text-xs font-bold text-[#0f5864]">
                   {toPersianDigits(
                     (invoicePhoto ? 1 : 0) + (paymentReceiptPhoto ? 1 : 0)
                   )}{' '}
-                  از ۲ مدرک ثبت شده
+                  از ۲ مدرک
                 </span>
               </div>
 
               {uploadError && (
-                <div className="mb-3 px-3.5 py-2 rounded-md bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
+                <div className="mb-3 px-3.5 py-2.5 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 font-medium">
                   {uploadError}
                 </div>
               )}
@@ -296,13 +376,15 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 onChange={(e) => handleFileChange('paymentReceipt', e)}
               />
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                 {/* Slot 1: Invoice Photo */}
                 <div
-                  className={`rounded-lg border p-4 flex flex-col justify-between gap-3 transition-colors ${
-                    invoicePhoto
-                      ? 'border-emerald-300 bg-emerald-50/25'
-                      : 'border-slate-200 bg-slate-50/50'
+                  className={`rounded-xl border-2 p-3.5 sm:p-4 flex flex-col justify-between gap-3 transition-colors ${
+                    needsInvoiceRetake
+                      ? 'border-red-500 bg-red-50/40'
+                      : invoicePhoto
+                        ? 'border-emerald-300 bg-emerald-50/25'
+                        : 'border-slate-200 bg-slate-50/50'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -312,10 +394,18 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                     </span>
                     <span
                       className={`text-[11px] font-bold ${
-                        invoicePhoto ? 'text-emerald-700' : 'text-amber-700'
+                        needsInvoiceRetake
+                          ? 'text-red-700'
+                          : invoicePhoto
+                            ? 'text-emerald-700'
+                            : 'text-amber-700'
                       }`}
                     >
-                      {invoicePhoto ? 'ثبت شد' : 'الزامی'}
+                      {needsInvoiceRetake
+                        ? 'رد شده · نیاز به عکس مجدد'
+                        : invoicePhoto
+                          ? 'ثبت شد'
+                          : 'الزامی'}
                     </span>
                   </div>
 
@@ -329,7 +419,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                             photo: invoicePhoto,
                           })
                         }
-                        className="group relative block w-full h-40 rounded-md overflow-hidden border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864]"
+                        className="group relative block w-full h-40 rounded-lg overflow-hidden border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864]"
                       >
                         <img
                           src={invoicePhoto.dataUrl}
@@ -338,7 +428,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                           className="w-full h-full object-cover"
                         />
                         <span className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/35 transition-colors flex items-center justify-center">
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white text-slate-900 text-xs font-semibold shadow-sm">
+                          <span className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white/95 text-slate-900 text-xs font-semibold shadow-sm">
                             <Eye className="w-3.5 h-3.5" />
                             مشاهده بزرگ
                           </span>
@@ -358,17 +448,29 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                             type="button"
                             disabled={uploadingType === 'invoice'}
                             onClick={() => invoiceInputRef.current?.click()}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors"
+                            className={`flex-1 min-h-[44px] inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl sm:rounded-md text-xs font-bold transition-colors ${
+                              needsInvoiceRetake
+                                ? 'bg-red-600 text-white hover:bg-red-700'
+                                : 'bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white'
+                            }`}
                           >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            تغییر عکس فاکتور
+                            {needsInvoiceRetake ? (
+                              <Camera className="w-4 h-4" />
+                            ) : (
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            )}
+                            {uploadingType === 'invoice'
+                              ? 'در حال بارگذاری...'
+                              : needsInvoiceRetake
+                                ? 'گرفتن عکس مجدد از فاکتور'
+                                : 'تغییر عکس فاکتور'}
                           </button>
                           <button
                             type="button"
                             onClick={() => onRemoveDocument(order.id, 'invoice')}
                             title="حذف عکس فاکتور"
                             aria-label="حذف عکس فاکتور"
-                            className="p-2 rounded-md bg-white text-red-600 border border-red-200 hover:bg-red-600 hover:text-white transition-colors"
+                            className="w-11 h-11 rounded-xl sm:rounded-md bg-white text-red-600 border border-red-200 hover:bg-red-600 hover:text-white flex items-center justify-center transition-colors shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -376,16 +478,16 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center text-center py-6 px-3 border border-dashed border-slate-300 rounded-md bg-white">
+                    <div className="flex flex-col items-center justify-center text-center py-5 px-3 border border-dashed border-slate-300 rounded-xl bg-white">
                       <Camera className="w-7 h-7 text-slate-400 mb-2" />
-                      <p className="text-xs text-slate-500 mb-3">
-                        تصویر فاکتور امضاشده مشتری را با دوربین ثبت یا آپلود کنید
+                      <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                        تصویر فاکتور امضاشده مشتری را ثبت یا آپلود کنید
                       </p>
                       <button
                         type="button"
                         disabled={uploadingType === 'invoice'}
                         onClick={() => invoiceInputRef.current?.click()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold bg-[#0f5864] text-white hover:bg-[#0b434d] disabled:opacity-60 transition-colors whitespace-nowrap"
+                        className="w-full min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#0f5864] text-white hover:bg-[#0b434d] active:scale-[0.99] transition-all whitespace-nowrap"
                       >
                         <Camera className="w-4 h-4" />
                         {uploadingType === 'invoice'
@@ -398,10 +500,12 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
                 {/* Slot 2: Payment Receipt Photo */}
                 <div
-                  className={`rounded-lg border p-4 flex flex-col justify-between gap-3 transition-colors ${
-                    paymentReceiptPhoto
-                      ? 'border-emerald-300 bg-emerald-50/25'
-                      : 'border-slate-200 bg-slate-50/50'
+                  className={`rounded-xl border-2 p-3.5 sm:p-4 flex flex-col justify-between gap-3 transition-colors ${
+                    needsReceiptRetake
+                      ? 'border-red-500 bg-red-50/40'
+                      : paymentReceiptPhoto
+                        ? 'border-emerald-300 bg-emerald-50/25'
+                        : 'border-slate-200 bg-slate-50/50'
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -411,10 +515,18 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                     </span>
                     <span
                       className={`text-[11px] font-bold ${
-                        paymentReceiptPhoto ? 'text-emerald-700' : 'text-amber-700'
+                        needsReceiptRetake
+                          ? 'text-red-700'
+                          : paymentReceiptPhoto
+                            ? 'text-emerald-700'
+                            : 'text-amber-700'
                       }`}
                     >
-                      {paymentReceiptPhoto ? 'ثبت شد' : 'الزامی'}
+                      {needsReceiptRetake
+                        ? 'رد شده · نیاز به عکس مجدد'
+                        : paymentReceiptPhoto
+                          ? 'ثبت شد'
+                          : 'الزامی'}
                     </span>
                   </div>
 
@@ -428,7 +540,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                             photo: paymentReceiptPhoto,
                           })
                         }
-                        className="group relative block w-full h-40 rounded-md overflow-hidden border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864]"
+                        className="group relative block w-full h-40 rounded-lg overflow-hidden border border-slate-200 bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864]"
                       >
                         <img
                           src={paymentReceiptPhoto.dataUrl}
@@ -437,7 +549,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                           className="w-full h-full object-cover"
                         />
                         <span className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/35 transition-colors flex items-center justify-center">
-                          <span className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white text-slate-900 text-xs font-semibold shadow-sm">
+                          <span className="sm:opacity-0 sm:group-hover:opacity-100 transition-opacity inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-white/95 text-slate-900 text-xs font-semibold shadow-sm">
                             <Eye className="w-3.5 h-3.5" />
                             مشاهده بزرگ
                           </span>
@@ -459,10 +571,22 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                             type="button"
                             disabled={uploadingType === 'paymentReceipt'}
                             onClick={() => receiptInputRef.current?.click()}
-                            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-xs font-semibold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors"
+                            className={`flex-1 min-h-[44px] inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl sm:rounded-md text-xs font-bold transition-colors ${
+                              needsReceiptRetake
+                                ? 'bg-red-600 text-white hover:bg-red-700'
+                                : 'bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white'
+                            }`}
                           >
-                            <RefreshCw className="w-3.5 h-3.5" />
-                            تغییر عکس رسید
+                            {needsReceiptRetake ? (
+                              <Camera className="w-4 h-4" />
+                            ) : (
+                              <RefreshCw className="w-3.5 h-3.5" />
+                            )}
+                            {uploadingType === 'paymentReceipt'
+                              ? 'در حال بارگذاری...'
+                              : needsReceiptRetake
+                                ? 'گرفتن عکس مجدد از رسید'
+                                : 'تغییر عکس رسید'}
                           </button>
                           <button
                             type="button"
@@ -471,7 +595,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                             }
                             title="حذف عکس رسید پرداخت"
                             aria-label="حذف عکس رسید پرداخت"
-                            className="p-2 rounded-md bg-white text-red-600 border border-red-200 hover:bg-red-600 hover:text-white transition-colors"
+                            className="w-11 h-11 rounded-xl sm:rounded-md bg-white text-red-600 border border-red-200 hover:bg-red-600 hover:text-white flex items-center justify-center transition-colors shrink-0"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -479,16 +603,16 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                       )}
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center justify-center text-center py-6 px-3 border border-dashed border-slate-300 rounded-md bg-white">
+                    <div className="flex flex-col items-center justify-center text-center py-5 px-3 border border-dashed border-slate-300 rounded-xl bg-white">
                       <Camera className="w-7 h-7 text-slate-400 mb-2" />
-                      <p className="text-xs text-slate-500 mb-3">
-                        تصویر رسید دستگاه کارت‌خوان یا واریز مشتری را ثبت یا آپلود کنید
+                      <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                        تصویر رسید کارت‌خوان یا واریز مشتری را ثبت یا آپلود کنید
                       </p>
                       <button
                         type="button"
                         disabled={uploadingType === 'paymentReceipt'}
                         onClick={() => receiptInputRef.current?.click()}
-                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-xs font-bold bg-[#0f5864] text-white hover:bg-[#0b434d] disabled:opacity-60 transition-colors whitespace-nowrap"
+                        className="w-full min-h-[46px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#0f5864] text-white hover:bg-[#0b434d] active:scale-[0.99] transition-all whitespace-nowrap"
                       >
                         <Camera className="w-4 h-4" />
                         {uploadingType === 'paymentReceipt'
@@ -502,10 +626,10 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             </div>
           </div>
 
-          {/* Sticky Action Footer */}
-          <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          {/* Sticky Action Footer (Full-Width Thumb CTA on Mobile) */}
+          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-safe shrink-0">
             {completed ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              <>
                 <span className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   تحویل تکمیل شد و عکس فاکتور و رسید پرداخت به بخش صدور فاکتور ارسال گردید.
@@ -513,42 +637,48 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-md text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
                 >
                   بستن
                 </button>
-              </div>
-            ) : bothUploaded ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+              </>
+            ) : readyToSubmit ? (
+              <>
                 <span className="text-xs font-semibold text-emerald-800">
-                  هر دو مدرک (فاکتور و رسید پرداخت) بارگذاری شدند و آماده ارسال به بخش صدور فاکتور هستند.
+                  {financeRejected
+                    ? 'مدارک اصلاحی ثبت شدند و آماده ارسال مجدد به واحد صدور فاکتور هستند.'
+                    : 'هر دو مدرک بارگذاری شدند و آماده ارسال به بخش صدور فاکتور هستند.'}
                 </span>
                 <button
                   type="button"
                   onClick={() => onCompleteDelivery(order.id)}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 shadow-xs transition-colors whitespace-nowrap"
+                  className="w-full sm:w-auto min-h-[48px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 rounded-xl sm:rounded-md text-sm sm:text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99] shadow-sm transition-all whitespace-nowrap"
                 >
                   <CheckCheck className="w-4 h-4" />
-                  اتمام تحویل و ارسال به واحد صدور فاکتور
+                  {financeRejected
+                    ? 'ارسال مجدد مدارک و اتمام تحویل'
+                    : 'اتمام تحویل و ارسال به صدور فاکتور'}
                 </button>
-              </div>
+              </>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-3 w-full">
-                <span className="text-xs text-slate-600">
-                  {!invoicePhoto && !paymentReceiptPhoto
-                    ? 'برای نمایش دکمه اتمام تحویل، لطفاً عکس فاکتور و عکس رسید پرداخت را ثبت و آپلود کنید.'
-                    : !invoicePhoto
-                      ? 'عکس رسید پرداخت ثبت شد — برای نمایش دکمه اتمام تحویل، عکس فاکتور را نیز ثبت کنید.'
-                      : 'عکس فاکتور ثبت شد — برای نمایش دکمه اتمام تحویل، عکس رسید پرداخت را نیز ثبت کنید.'}
+              <>
+                <span className="text-xs font-medium text-slate-600 leading-relaxed">
+                  {hasUnresolvedRejectedDoc
+                    ? 'برای فعال شدن ارسال مجدد، لطفاً عکس جدید مدرک(های) ردشده با کادر قرمز را ثبت کنید.'
+                    : !invoicePhoto && !paymentReceiptPhoto
+                      ? 'برای نمایش دکمه اتمام تحویل، لطفاً عکس فاکتور و عکس رسید پرداخت را ثبت کنید.'
+                      : !invoicePhoto
+                        ? 'عکس رسید پرداخت ثبت شد — لطفاً عکس فاکتور را نیز ثبت کنید.'
+                        : 'عکس فاکتور ثبت شد — لطفاً عکس رسید پرداخت را نیز ثبت کنید.'}
                 </span>
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-md text-xs font-medium bg-white text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
                 >
                   بستن
                 </button>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -560,11 +690,11 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
           role="dialog"
           aria-modal="true"
           aria-label={previewPhoto.title}
-          className="no-print fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+          className="no-print fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4"
           onClick={() => setPreviewPhoto(null)}
         >
           <div
-            className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+            className="bg-white rounded-2xl sm:rounded-xl max-w-3xl w-full max-h-[90dvh] overflow-hidden flex flex-col shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
@@ -575,17 +705,17 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 type="button"
                 onClick={() => setPreviewPhoto(null)}
                 aria-label="بستن پیش‌نمایش تصویر"
-                className="p-1 text-slate-500 hover:text-slate-900 rounded"
+                className="w-9 h-9 flex items-center justify-center text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 rounded-lg"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-4 bg-slate-900 flex items-center justify-center overflow-auto">
+            <div className="p-3 sm:p-4 bg-slate-900 flex items-center justify-center overflow-auto">
               <img
                 src={previewPhoto.photo.dataUrl}
                 alt={previewPhoto.title}
                 referrerPolicy="no-referrer"
-                className="max-h-[75vh] w-auto object-contain rounded"
+                className="max-h-[75dvh] w-auto object-contain rounded"
               />
             </div>
           </div>

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   ChevronLeft,
+  Clock,
   MapPin,
   Package,
   Printer,
@@ -11,20 +12,27 @@ import {
 } from 'lucide-react';
 import { DEPARTMENT_LABELS } from '../../data/initialOrders';
 import { Order } from '../../types/order';
+import { AccessControlHelpers } from '../../types/permissions';
 import { formatWeight, getShippingWeight } from '../../utils/formatters';
 
 interface ShippingPageProps {
   orders: Order[];
   printingOrderId: string | null;
+  access: AccessControlHelpers;
   onPrintAll: () => void;
   onSelectOrder: (orderId: string) => void;
 }
 
-type ShippingFilter = 'all' | 'locked' | 'ready' | 'delivered' | 'returned' | 'rejected';
+type ShippingFilter =
+  | 'all'
+  | 'locked'
+  | 'ready'
+  | 'delivered'
+  | 'returned'
+  | 'rejected';
 
 function isLocked(order: Order): boolean {
   return (
-    order.status === 'pending_production_approval' ||
     order.status === 'in_production' ||
     order.status === 'pending_finance_approval' ||
     order.status === 'finance_discrepancy_review'
@@ -39,7 +47,9 @@ function isPendingReturnConfirmInShipping(order: Order): boolean {
 }
 
 function isShippingPriority(order: Order): boolean {
-  return isPendingReturnConfirmInShipping(order) || order.status === 'pending_shipping';
+  return (
+    isPendingReturnConfirmInShipping(order) || order.status === 'pending_shipping'
+  );
 }
 
 function getShippingSortRank(order: Order): number {
@@ -52,7 +62,10 @@ function getShippingSortRank(order: Order): number {
   return 6;
 }
 
-function getShippingStatusDisplay(order: Order): { label: string; className: string } {
+function getShippingStatusDisplay(order: Order): {
+  label: string;
+  className: string;
+} {
   if (order.status === 'rejected') {
     const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
     return { label: `رد شده (${src})`, className: 'text-red-700' };
@@ -101,6 +114,7 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
       return (
         order.code.toLowerCase().includes(q) ||
         order.address.toLowerCase().includes(q) ||
+        order.district.toLowerCase().includes(q) ||
         order.driverName.toLowerCase().includes(q)
       );
     });
@@ -121,69 +135,75 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
   );
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
       {/* Header */}
-      <header className="no-print flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-slate-500">
-          <span>داشبورد مدیریت</span>
-          <ChevronLeft className="w-4 h-4 text-slate-400" />
-          <span className="font-bold text-slate-800">بخش ارسال</span>
+      <header className="no-print flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-1.5 text-sm sm:text-[13px] text-slate-500">
+          <span className="hidden sm:inline">داشبورد مدیریت</span>
+          <ChevronLeft className="hidden sm:inline w-4 h-4 text-slate-400" />
+          <h1 className="font-bold text-slate-900 text-base sm:text-[14px]">
+            بخش ارسال
+          </h1>
         </div>
 
         <button
           type="button"
           onClick={onPrintAll}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap shrink-0"
+          title="پرینت تمامی سفارشات"
+          className="min-h-[40px] sm:min-h-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap shrink-0"
         >
           <Printer className="w-4 h-4" />
-          پرینت تمامی سفارشات
+          <span className="hidden sm:inline">پرینت تمامی سفارشات</span>
+          <span className="sm:hidden">پرینت</span>
         </button>
       </header>
 
-      {/* Search & Filter */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+      {/* Search & Horizontally Scrollable Filter */}
+      <div className="no-print flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="جستجو کد سفارش، آدرس یا راننده..."
-            className="w-64 pr-8 pl-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#0f5864]"
+            className="w-full sm:w-64 h-11 sm:h-9 pr-9 sm:pr-8 pl-3 text-sm sm:text-xs bg-white border border-slate-200 rounded-xl sm:rounded-lg focus:outline-none focus:border-[#0f5864]"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-200/70 rounded-lg">
-          {(
-            [
-              { id: 'all', label: 'همه' },
-              { id: 'ready', label: 'آماده ارسال' },
-              { id: 'locked', label: 'در انتظار صدور فاکتور' },
-              { id: 'delivered', label: 'تحویل شده' },
-              { id: 'returned', label: 'مرجوعی' },
-              { id: 'rejected', label: 'رد شده' },
-            ] as Array<{ id: ShippingFilter; label: string }>
-          ).map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                filter === f.id
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+          <div className="inline-flex items-center gap-1 p-1 bg-slate-200/75 rounded-xl sm:rounded-lg">
+            {(
+              [
+                { id: 'all', label: 'همه' },
+                { id: 'ready', label: 'آماده ارسال' },
+                { id: 'locked', label: 'در انتظار فاکتور' },
+                { id: 'delivered', label: 'تحویل شده' },
+                { id: 'returned', label: 'مرجوعی' },
+                { id: 'rejected', label: 'رد شده' },
+              ] as Array<{ id: ShippingFilter; label: string }>
+            ).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className={`min-h-[36px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold rounded-lg sm:rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  filter === f.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Collapsed Shipping Order Cards (Click to open popup) */}
+      {/* Collapsed Shipping Order Cards */}
       <div className="flex flex-col gap-3">
         {sortedAndFilteredOrders.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
+          <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
             <p className="text-sm font-medium text-slate-600 mb-3">
               {orders.length === 0
                 ? 'در این تاریخ سفارشی برای ارسال ثبت نشده است.'
@@ -196,7 +216,7 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
                   setSearchQuery('');
                   setFilter('all');
                 }}
-                className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
+                className="min-h-[44px] px-5 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-xl hover:bg-[#0f5864] hover:text-white transition-colors"
               >
                 نمایش همه سفارش‌ها
               </button>
@@ -216,24 +236,25 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
               0
             );
 
-            const showOtherDivider = priorityCount > 0 && index === priorityCount;
+            const showOtherDivider =
+              priorityCount > 0 && index === priorityCount;
 
             const cardStyle = pendingReturnConfirm
-              ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20 hover:bg-red-50/30'
+              ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
               : rejected || returned
-                ? 'border border-red-300 bg-red-50/20 hover:border-red-400'
+                ? 'border border-red-300 bg-red-50/20'
                 : readyToShip
-                  ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15 hover:bg-[#f4fafa]'
+                  ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
                   : delivered
-                    ? 'border border-emerald-400 bg-emerald-50/20 hover:border-emerald-500'
+                    ? 'border border-emerald-400 bg-emerald-50/20'
                     : discrepancyReview
-                      ? 'border border-amber-400 bg-amber-50/20 hover:border-amber-500'
-                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864] hover:shadow-xs';
+                      ? 'border border-amber-400 bg-amber-50/20'
+                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
             return (
               <React.Fragment key={order.id}>
                 {showOtherDivider && (
-                  <div className="no-print flex items-center gap-3 pt-2">
+                  <div className="no-print flex items-center gap-3 pt-1">
                     <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
                       سایر سفارش‌ها
                     </span>
@@ -244,41 +265,44 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
                 <article
                   className={`order-card-printable ${
                     printingOrderId === order.id ? 'print-target' : ''
-                  } rounded-lg overflow-hidden transition-all ${cardStyle}`}
+                  } rounded-2xl sm:rounded-xl overflow-hidden transition-all ${cardStyle}`}
                 >
-                  {/* Clickable Collapsed Summary Surface */}
                   <button
                     type="button"
                     onClick={() => onSelectOrder(order.id)}
-                    className="w-full text-right block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
+                    className="w-full text-right block active:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
                   >
                     {pendingReturnConfirm && (
-                      <div className="no-print px-5 py-1.5 bg-red-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
+                      <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
                           <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                          سفارش مرجوعی — نیازمند تایید مرجوعی در بخش ارسال
+                          سفارش مرجوعی — نیازمند تایید در بخش ارسال
                         </span>
-                        <span className="opacity-95 text-[11px]">کلیک برای تایید</span>
+                        <span className="opacity-95 text-[11px]">لمس برای تایید</span>
                       </div>
                     )}
 
                     {readyToShip && (
-                      <div className="no-print px-5 py-1.5 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
+                      <div className="no-print px-4 sm:px-5 py-2 bg-[#0f5864] text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
                           <Zap className="w-3.5 h-3.5 shrink-0" />
-                          اولویت ارسال — تاییدشده توسط بخش صدور فاکتور، آماده تخصیص راننده و خروج
+                          اولویت ارسال — آماده تخصیص راننده و خروج
                         </span>
-                        <span className="opacity-95 text-[11px]">کلیک برای تخصیص راننده</span>
+                        <span className="opacity-95 text-[11px]">تخصیص راننده</span>
                       </div>
                     )}
 
-                    <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 flex-1 items-center text-[13px]">
+                    <div className="p-4 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-2.5 flex-1 items-center text-[13px]">
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">کد سفارش</span>
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            کد سفارش
+                          </span>
                           <span
-                            className={`tabular-nums text-[15px] font-bold ${
-                              rejected || returned ? 'text-red-700' : 'text-[#0056b3]'
+                            className={`tabular-nums text-base font-bold ${
+                              rejected || returned
+                                ? 'text-red-700'
+                                : 'text-[#0056b3]'
                             }`}
                           >
                             {order.code}
@@ -286,37 +310,58 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
                         </div>
 
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">بازه ارسال</span>
-                          <span className="font-semibold text-slate-800">{order.deliverySlot}</span>
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            بازه ارسال
+                          </span>
+                          <span className="font-semibold text-slate-800 inline-flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            {order.deliverySlot}
+                          </span>
                         </div>
 
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">اقلام و وزن</span>
-                          <span className="tabular-nums font-medium text-slate-700 inline-flex items-center gap-1.5">
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            اقلام و وزن
+                          </span>
+                          <span className="tabular-nums font-semibold text-slate-800 inline-flex items-center gap-1">
                             <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                             {order.items.length} قلم · {formatWeight(totalEffectiveKg)}
                           </span>
                         </div>
 
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت ارسال</span>
-                          <span className={`font-bold text-xs inline-flex items-center gap-1 ${statusDisplay.className}`}>
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            وضعیت ارسال
+                          </span>
+                          <span
+                            className={`font-bold text-xs inline-flex items-center gap-1 ${statusDisplay.className}`}
+                          >
                             {delivered && <Truck className="w-3.5 h-3.5 shrink-0" />}
                             {statusDisplay.label}
                           </span>
                         </div>
                       </div>
 
-                      <div className="no-print inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f5864] shrink-0">
+                      <div className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-[#0f5864] shrink-0">
                         <span>مشاهده و اقدام</span>
                         <ChevronLeft className="w-4 h-4" />
                       </div>
                     </div>
 
-                    {/* Subtle 1-line address preview inside collapsed card */}
-                    <div className="px-5 pb-3 pt-0 flex items-center gap-1.5 text-xs text-slate-500 truncate">
-                      <MapPin className="w-3.5 h-3.5 text-red-500 shrink-0" />
-                      <span className="truncate">{order.address}</span>
+                    {/* Full Readable Address + Mobile Action Prompt */}
+                    <div className="px-4 sm:px-5 pb-3.5 pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-start gap-1.5 text-xs text-slate-600 leading-relaxed min-w-0">
+                        <MapPin className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        <span>
+                          <strong className="text-slate-800">{order.district}:</strong>{' '}
+                          {order.address}
+                        </span>
+                      </div>
+
+                      <div className="sm:hidden no-print inline-flex items-center justify-end gap-1 text-xs font-bold text-[#0f5864] pt-1">
+                        <span>مشاهده و اقدام</span>
+                        <ChevronLeft className="w-4 h-4" />
+                      </div>
                     </div>
                   </button>
 

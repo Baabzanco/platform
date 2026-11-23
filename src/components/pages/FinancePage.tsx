@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  AlertTriangle,
   Camera,
   ChevronLeft,
   Printer,
@@ -10,6 +11,7 @@ import {
 } from 'lucide-react';
 import { DEPARTMENT_LABELS } from '../../data/initialOrders';
 import { Order } from '../../types/order';
+import { AccessControlHelpers } from '../../types/permissions';
 import {
   calculateItemTotal,
   calculateOrderTotal,
@@ -21,6 +23,7 @@ import {
 interface FinancePageProps {
   orders: Order[];
   printingOrderId: string | null;
+  access: AccessControlHelpers;
   onPrintAll: () => void;
   onSelectOrder: (orderId: string) => void;
 }
@@ -40,7 +43,7 @@ function isFinanceApproved(order: Order): boolean {
 }
 
 function isWaitingProd(order: Order): boolean {
-  return order.status === 'pending_production_approval' || order.status === 'in_production';
+  return order.status === 'in_production';
 }
 
 function isPendingReturnConfirmInFinance(order: Order): boolean {
@@ -53,6 +56,12 @@ function isPendingReturnConfirmInFinance(order: Order): boolean {
 function hasPendingDriverDocs(order: Order): boolean {
   return Boolean(
     order.driverDelivery?.sentToFinance && !order.driverDelivery?.financeVerified
+  );
+}
+
+function hasRejectedDriverDocsAwaitingRetake(order: Order): boolean {
+  return Boolean(
+    order.driverDelivery?.financeRejected && !order.driverDelivery?.sentToFinance
   );
 }
 
@@ -70,10 +79,11 @@ function getFinanceSortRank(order: Order): number {
   if (hasPendingDriverDocs(order)) return 1;
   if (order.status === 'finance_discrepancy_review') return 2;
   if (order.status === 'pending_finance_approval') return 3;
-  if (isWaitingProd(order)) return 4;
-  if (isFinanceApproved(order)) return 5;
-  if (order.status === 'returned') return 6;
-  return 7;
+  if (hasRejectedDriverDocsAwaitingRetake(order)) return 4;
+  if (isWaitingProd(order)) return 5;
+  if (isFinanceApproved(order)) return 6;
+  if (order.status === 'returned') return 7;
+  return 8;
 }
 
 export const FinancePage: React.FC<FinancePageProps> = ({
@@ -90,10 +100,15 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     const filtered = orders.filter((order) => {
       const matchesFilter =
         filter === 'all' ||
-        (filter === 'driver_docs' && Boolean(order.driverDelivery?.sentToFinance)) ||
+        (filter === 'driver_docs' &&
+          Boolean(
+            order.driverDelivery?.sentToFinance ||
+              order.driverDelivery?.financeRejected
+          )) ||
         (filter === 'waiting_prod' && isWaitingProd(order)) ||
         (filter === 'ready' && order.status === 'pending_finance_approval') ||
-        (filter === 'discrepancy' && order.status === 'finance_discrepancy_review') ||
+        (filter === 'discrepancy' &&
+          order.status === 'finance_discrepancy_review') ||
         (filter === 'approved' && isFinanceApproved(order)) ||
         (filter === 'returned' && order.status === 'returned') ||
         (filter === 'rejected' && order.status === 'rejected');
@@ -123,7 +138,9 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     [sortedAndFilteredOrders]
   );
 
-  const getFinanceStatusDisplay = (order: Order): { text: string; className: string } => {
+  const getFinanceStatusDisplay = (
+    order: Order
+  ): { text: string; className: string } => {
     if (order.status === 'rejected') {
       const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
       return { text: `رد شده (${src})`, className: 'text-red-700' };
@@ -131,13 +148,19 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     if (order.status === 'returned') {
       const confirmed = order.returnRecord?.confirmations.finance.confirmed;
       return confirmed
-        ? { text: 'مرجوعی تایید شده (صدور فاکتور)', className: 'text-emerald-700' }
-        : { text: 'مرجوع شده — در انتظار تایید صدور فاکتور', className: 'text-red-700' };
+        ? { text: 'مرجوعی تایید شده', className: 'text-emerald-700' }
+        : { text: 'مرجوع شده — نیازمند تایید فاکتور', className: 'text-red-700' };
+    }
+    if (hasRejectedDriverDocsAwaitingRetake(order)) {
+      return {
+        text: 'مدارک راننده رد شد — در انتظار عکس مجدد',
+        className: 'text-red-700',
+      };
     }
     if (order.driverDelivery?.sentToFinance) {
       return order.driverDelivery.financeVerified
         ? { text: 'مدارک تحویل راننده تایید شد', className: 'text-emerald-700' }
-        : { text: 'مدارک تحویل راننده دریافت شد (نیازمند بررسی)', className: 'text-emerald-700' };
+        : { text: 'مدارک تحویل دریافت شد (آماده بررسی)', className: 'text-emerald-700' };
     }
     if (order.status === 'finance_discrepancy_review') {
       return { text: 'در انتظار تایید مجدد (اصلاح وزن)', className: 'text-amber-700' };
@@ -152,71 +175,77 @@ export const FinancePage: React.FC<FinancePageProps> = ({
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
       {/* Header */}
-      <header className="no-print flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-slate-500">
-          <span>داشبورد مدیریت</span>
-          <ChevronLeft className="w-4 h-4 text-slate-400" />
-          <span className="font-bold text-slate-800">بخش صدور فاکتور</span>
+      <header className="no-print flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-1.5 text-sm sm:text-[13px] text-slate-500">
+          <span className="hidden sm:inline">داشبورد مدیریت</span>
+          <ChevronLeft className="hidden sm:inline w-4 h-4 text-slate-400" />
+          <h1 className="font-bold text-slate-900 text-base sm:text-[14px]">
+            بخش صدور فاکتور
+          </h1>
         </div>
 
         <button
           type="button"
           onClick={onPrintAll}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap shrink-0"
+          title="پرینت تمامی سفارشات"
+          className="min-h-[40px] sm:min-h-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap shrink-0"
         >
           <Printer className="w-4 h-4" />
-          پرینت تمامی سفارشات
+          <span className="hidden sm:inline">پرینت تمامی سفارشات</span>
+          <span className="sm:hidden">پرینت</span>
         </button>
       </header>
 
-      {/* Search & Filter Bar */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-3">
+      {/* Search & Horizontally Scrollable Filter Bar */}
+      <div className="no-print flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
         <div className="relative">
-          <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <Search className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="جستجو کد، طرف حساب یا محصول..."
-            className="w-64 pr-8 pl-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#0f5864]"
+            className="w-full sm:w-64 h-11 sm:h-9 pr-9 sm:pr-8 pl-3 text-sm sm:text-xs bg-white border border-slate-200 rounded-xl sm:rounded-lg focus:outline-none focus:border-[#0f5864]"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-200/70 rounded-lg">
-          {(
-            [
-              { id: 'all', label: 'همه' },
-              { id: 'driver_docs', label: 'مدارک تحویل راننده' },
-              { id: 'ready', label: 'آماده تایید' },
-              { id: 'discrepancy', label: 'مغایرت وزن' },
-              { id: 'returned', label: 'مرجوعی' },
-              { id: 'approved', label: 'تایید شده' },
-              { id: 'waiting_prod', label: 'در انتظار تولید' },
-              { id: 'rejected', label: 'رد شده' },
-            ] as Array<{ id: FinanceFilter; label: string }>
-          ).map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                filter === f.id
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+          <div className="inline-flex items-center gap-1 p-1 bg-slate-200/75 rounded-xl sm:rounded-lg">
+            {(
+              [
+                { id: 'all', label: 'همه' },
+                { id: 'driver_docs', label: 'مدارک راننده' },
+                { id: 'ready', label: 'آماده تایید' },
+                { id: 'discrepancy', label: 'مغایرت وزن' },
+                { id: 'returned', label: 'مرجوعی' },
+                { id: 'approved', label: 'تایید شده' },
+                { id: 'waiting_prod', label: 'در انتظار تولید' },
+                { id: 'rejected', label: 'رد شده' },
+              ] as Array<{ id: FinanceFilter; label: string }>
+            ).map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className={`min-h-[36px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold rounded-lg sm:rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                  filter === f.id
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Collapsed Finance Order Cards (Click to open popup) */}
+      {/* Collapsed Finance Order Cards */}
       <div className="flex flex-col gap-3">
         {sortedAndFilteredOrders.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
+          <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
             <p className="text-sm font-medium text-slate-600 mb-3">
               {orders.length === 0
                 ? 'در این تاریخ سفارشی برای صدور فاکتور ثبت نشده است.'
@@ -229,7 +258,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                   setSearchQuery('');
                   setFilter('all');
                 }}
-                className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
+                className="min-h-[44px] px-5 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-xl hover:bg-[#0f5864] hover:text-white transition-colors"
               >
                 نمایش همه سفارش‌ها
               </button>
@@ -241,6 +270,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
             const returned = order.status === 'returned';
             const pendingReturnConfirm = isPendingReturnConfirmInFinance(order);
             const pendingDriverDocs = hasPendingDriverDocs(order);
+            const rejectedDriverDocs = hasRejectedDriverDocsAwaitingRetake(order);
             const discrepancy = order.status === 'finance_discrepancy_review';
             const readyForApproval = order.status === 'pending_finance_approval';
             const approved = isFinanceApproved(order);
@@ -252,26 +282,29 @@ export const FinancePage: React.FC<FinancePageProps> = ({
             );
             const netAfterReturn = Math.max(0, orderTotal - returnDeduction);
 
-            const showOtherDivider = priorityCount > 0 && index === priorityCount;
+            const showOtherDivider =
+              priorityCount > 0 && index === priorityCount;
 
             const cardStyle = pendingReturnConfirm
-              ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20 hover:bg-red-50/30'
+              ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
               : pendingDriverDocs
-                ? 'border-2 border-emerald-600 bg-white shadow-md ring-2 ring-emerald-500/20 hover:bg-emerald-50/30'
-                : rejected || returned
-                  ? 'border border-red-300 bg-red-50/20 hover:border-red-400'
-                  : discrepancy
-                    ? 'border-2 border-amber-500 bg-amber-50/20 shadow-md ring-2 ring-amber-500/20 hover:bg-amber-50/40'
-                    : readyForApproval
-                      ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15 hover:bg-[#f4fafa]'
-                      : approved
-                        ? 'border border-emerald-400 bg-emerald-50/20 hover:border-emerald-500'
-                        : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864] hover:shadow-xs';
+                ? 'border-2 border-emerald-600 bg-white shadow-md ring-2 ring-emerald-500/20'
+                : rejectedDriverDocs
+                  ? 'border border-red-400 bg-red-50/25'
+                  : rejected || returned
+                    ? 'border border-red-300 bg-red-50/20'
+                    : discrepancy
+                      ? 'border-2 border-amber-500 bg-amber-50/20 shadow-md ring-2 ring-amber-500/20'
+                      : readyForApproval
+                        ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
+                        : approved
+                          ? 'border border-emerald-400 bg-emerald-50/20'
+                          : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
             return (
               <React.Fragment key={order.id}>
                 {showOtherDivider && (
-                  <div className="no-print flex items-center gap-3 pt-2">
+                  <div className="no-print flex items-center gap-3 pt-1">
                     <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
                       سایر سفارش‌ها
                     </span>
@@ -282,71 +315,88 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                 <article
                   className={`order-card-printable ${
                     printingOrderId === order.id ? 'print-target' : ''
-                  } rounded-lg overflow-hidden transition-all ${cardStyle}`}
+                  } rounded-2xl sm:rounded-xl overflow-hidden transition-all ${cardStyle}`}
                 >
-                  {/* Clickable Collapsed Summary Surface */}
                   <button
                     type="button"
                     onClick={() => onSelectOrder(order.id)}
-                    className="w-full text-right block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
+                    className="w-full text-right block active:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
                   >
                     {pendingReturnConfirm && (
-                      <div className="no-print px-5 py-1.5 bg-red-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
+                      <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
                           <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                          اولویت فوری صدور فاکتور — سفارش مرجوعی نیازمند اصلاح سند و تایید مرجوعی
+                          سفارش مرجوعی نیازمند تایید در صدور فاکتور
                         </span>
                         <span className="tabular-nums opacity-95 text-[11px]">
-                          کسر مرجوعی: {formatRial(returnDeduction)}
+                          کسر: {formatRial(returnDeduction)}
                         </span>
                       </div>
                     )}
 
                     {pendingDriverDocs && !pendingReturnConfirm && (
-                      <div className="no-print px-5 py-1.5 bg-emerald-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
+                      <div className="no-print px-4 sm:px-5 py-2 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
                           <Camera className="w-3.5 h-3.5 shrink-0" />
-                          مدارک تحویل راننده دریافت شد — عکس فاکتور و رسید پرداخت آماده بررسی و تایید
+                          مدارک تحویل راننده دریافت شد — آماده بررسی (تایید یا رد)
                         </span>
-                        <span className="opacity-95 text-[11px]">کلیک برای مشاهده عکس‌ها</span>
+                        <span className="opacity-95 text-[11px]">مشاهده عکس‌ها</span>
+                      </div>
+                    )}
+
+                    {rejectedDriverDocs && !pendingReturnConfirm && (
+                      <div className="no-print px-4 sm:px-5 py-2 bg-red-100 text-red-900 border-b border-red-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                          مدارک تحویل رد شد — در انتظار عکاسی مجدد راننده
+                        </span>
+                        <span className="text-[11px] text-red-700 font-medium truncate max-w-[260px]">
+                          {order.driverDelivery?.financeRejectionReason}
+                        </span>
                       </div>
                     )}
 
                     {discrepancy && (
-                      <div className="no-print px-5 py-1.5 bg-amber-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
+                      <div className="no-print px-4 sm:px-5 py-2 bg-amber-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
                           <Scale className="w-3.5 h-3.5 shrink-0" />
-                          اولویت فوری صدور فاکتور — ارجاع مغایرت وزن از ارسال (نیازمند تایید مجدد)
+                          مغایرت وزن از ارسال — نیازمند تایید مجدد
                         </span>
-                        <span className="opacity-95 text-[11px]">کلیک برای بررسی</span>
+                        <span className="opacity-95 text-[11px]">بررسی و تایید</span>
                       </div>
                     )}
 
                     {readyForApproval && (
-                      <div className="no-print px-5 py-1.5 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold">
-                        <span className="inline-flex items-center gap-2">
+                      <div className="no-print px-4 sm:px-5 py-2 bg-[#0f5864] text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                        <span className="inline-flex items-center gap-1.5">
                           <Zap className="w-3.5 h-3.5 shrink-0" />
-                          وارد شده به صف صدور فاکتور — تولید تکمیل شده و آماده صدور فاکتور
+                          تولید تکمیل شد — آماده صدور فاکتور
                         </span>
-                        <span className="opacity-95 text-[11px]">کلیک برای تایید</span>
+                        <span className="opacity-95 text-[11px]">تایید فاکتور</span>
                       </div>
                     )}
 
-                    <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 flex-1 items-center text-[13px]">
+                    <div className="p-4 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-2.5 flex-1 items-center text-[13px]">
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">کد سفارش</span>
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            کد سفارش
+                          </span>
                           <span
-                            className={`tabular-nums text-[15px] font-bold ${
-                              rejected || returned ? 'text-red-700' : 'text-[#0056b3]'
+                            className={`tabular-nums text-base font-bold ${
+                              rejected || returned || rejectedDriverDocs
+                                ? 'text-red-700'
+                                : 'text-[#0056b3]'
                             }`}
                           >
                             {order.code}
                           </span>
                         </div>
 
-                        <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">طرف حساب</span>
+                        <div className="min-w-0">
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            طرف حساب
+                          </span>
                           <span className="font-semibold text-slate-900 block truncate">
                             {order.customerName}
                           </span>
@@ -362,14 +412,16 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                         </div>
 
                         <div>
-                          <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت صدور فاکتور</span>
+                          <span className="block text-[11px] text-slate-500 mb-0.5">
+                            وضعیت
+                          </span>
                           <span className={`font-bold text-xs ${statusInfo.className}`}>
                             {statusInfo.text}
                           </span>
                         </div>
                       </div>
 
-                      <div className="no-print inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f5864] shrink-0">
+                      <div className="no-print pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex items-center justify-between sm:justify-end gap-1.5 text-xs font-bold text-[#0f5864] shrink-0">
                         <span>مشاهده و اقدام</span>
                         <ChevronLeft className="w-4 h-4" />
                       </div>

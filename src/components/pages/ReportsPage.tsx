@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ChevronLeft, Printer } from 'lucide-react';
 import { Order, OrderStatus } from '../../types/order';
+import { AccessControlHelpers } from '../../types/permissions';
 import {
   calculateOrderTotal,
   formatNumber,
@@ -12,11 +13,11 @@ import {
 
 interface ReportsPageProps {
   orders: Order[];
+  access: AccessControlHelpers;
   onPrintAll: () => void;
 }
 
 const STAGE_ORDER: Array<{ status: OrderStatus; color: string }> = [
-  { status: 'pending_production_approval', color: 'bg-slate-400' },
   { status: 'in_production', color: 'bg-sky-500' },
   { status: 'pending_finance_approval', color: 'bg-indigo-500' },
   { status: 'finance_discrepancy_review', color: 'bg-amber-500' },
@@ -26,7 +27,11 @@ const STAGE_ORDER: Array<{ status: OrderStatus; color: string }> = [
   { status: 'rejected', color: 'bg-red-600' },
 ];
 
-export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) => {
+export const ReportsPage: React.FC<ReportsPageProps> = ({
+  orders,
+  access,
+  onPrintAll,
+}) => {
   const stats = useMemo(() => {
     let totalRequestedKg = 0;
     let totalDeliveredOrProducedKg = 0;
@@ -38,7 +43,6 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) 
     let deliveredCount = 0;
 
     const statusCounts: Record<OrderStatus, number> = {
-      pending_production_approval: 0,
       in_production: 0,
       pending_finance_approval: 0,
       finance_discrepancy_review: 0,
@@ -97,14 +101,18 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) 
           <span className="font-bold text-slate-800">گزارش‌ها و آمار زنده</span>
         </div>
 
-        <button
-          type="button"
-          onClick={onPrintAll}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap"
-        >
-          <Printer className="w-4 h-4" />
-          پرینت گزارش
-        </button>
+        {access.canView('action_print') && (
+          <button
+            type="button"
+            disabled={!access.canEdit('action_print')}
+            onClick={onPrintAll}
+            title={!access.canEdit('action_print') ? 'عدم دسترسی ویرایش/چاپ' : undefined}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white disabled:opacity-45 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          >
+            <Printer className="w-4 h-4" />
+            پرینت گزارش
+          </button>
+        )}
       </header>
 
       {/* KPI Strip */}
@@ -119,35 +127,49 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) 
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs text-slate-500 mb-1.5">وزن کل درخواستی / توزین‌شده</div>
-          <div className="tabular-nums text-2xl font-bold text-[#0f5864]">
-            {formatWeight(stats.totalRequestedKg)}
+        {(access.canView('field_requested_weight') ||
+          access.canView('field_produced_weight')) && (
+          <div className="bg-white border border-slate-200 rounded-lg p-4">
+            <div className="text-xs text-slate-500 mb-1.5">وزن کل درخواستی / توزین‌شده</div>
+            <div className="tabular-nums text-2xl font-bold text-[#0f5864]">
+              {access.canView('field_requested_weight')
+                ? formatWeight(stats.totalRequestedKg)
+                : '—'}
+            </div>
+            {access.canView('field_produced_weight') && (
+              <div className="tabular-nums text-xs text-slate-500 mt-1.5">
+                توزین‌شده تا این لحظه: {formatWeight(stats.totalDeliveredOrProducedKg)}
+              </div>
+            )}
           </div>
-          <div className="tabular-nums text-xs text-slate-500 mt-1.5">
-            توزین‌شده تا این لحظه: {formatWeight(stats.totalDeliveredOrProducedKg)}
-          </div>
-        </div>
+        )}
 
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs text-slate-500 mb-1.5">ارزش فاکتورهای صادرشده</div>
-          <div className="tabular-nums text-xl font-bold text-emerald-700 leading-8">
-            {formatRial(stats.approvedRevenue)}
+        {access.canView('field_order_total') && (
+          <div className="bg-white border border-slate-200 rounded-lg p-4">
+            <div className="text-xs text-slate-500 mb-1.5">ارزش فاکتورهای صادرشده</div>
+            <div className="tabular-nums text-xl font-bold text-emerald-700 leading-8">
+              {formatRial(stats.approvedRevenue)}
+            </div>
+            <div className="tabular-nums text-xs text-slate-500 mt-1.5">
+              کل جریان فعال: {formatRial(stats.totalPipelineRevenue)}
+            </div>
           </div>
-          <div className="tabular-nums text-xs text-slate-500 mt-1.5">
-            کل جریان فعال: {formatRial(stats.totalPipelineRevenue)}
-          </div>
-        </div>
+        )}
 
-        <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs text-slate-500 mb-1.5">مغایرت وزن و مرجوعی</div>
-          <div className="tabular-nums text-2xl font-bold text-amber-700">
-            {formatNumber(stats.discrepancyCount)} مغایرت
+        {(access.canView('field_revised_weight') ||
+          access.canView('field_returned_weight')) && (
+          <div className="bg-white border border-slate-200 rounded-lg p-4">
+            <div className="text-xs text-slate-500 mb-1.5">مغایرت وزن و مرجوعی</div>
+            <div className="tabular-nums text-2xl font-bold text-amber-700">
+              {formatNumber(stats.discrepancyCount)} مغایرت
+            </div>
+            {access.canView('field_returned_weight') && (
+              <div className="tabular-nums text-xs text-red-700 mt-1.5">
+                جمع وزن مرجوعی: {formatWeight(stats.totalReturnedKg)}
+              </div>
+            )}
           </div>
-          <div className="tabular-nums text-xs text-red-700 mt-1.5">
-            جمع وزن مرجوعی: {formatWeight(stats.totalReturnedKg)}
-          </div>
-        </div>
+        )}
       </section>
 
       {/* Workflow Stage Distribution */}
@@ -201,13 +223,27 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) 
           <table className="w-full border-collapse text-[13px]">
             <thead>
               <tr className="bg-white border-b border-slate-200 text-slate-500">
-                <th className="text-right font-normal px-4 py-3">کد</th>
-                <th className="text-right font-normal px-4 py-3">طرف حساب</th>
-                <th className="text-right font-normal px-4 py-3">وضعیت فعلی</th>
-                <th className="text-right font-normal px-4 py-3">وزن درخواستی</th>
-                <th className="text-right font-normal px-4 py-3">وزن مؤثر</th>
-                <th className="text-right font-normal px-4 py-3">مبلغ فاکتور</th>
-                <th className="text-right font-normal px-4 py-3">راننده</th>
+                {access.canView('field_order_code') && (
+                  <th className="text-right font-normal px-4 py-3">کد</th>
+                )}
+                {access.canView('field_customer_name') && (
+                  <th className="text-right font-normal px-4 py-3">طرف حساب</th>
+                )}
+                {access.canView('field_order_status') && (
+                  <th className="text-right font-normal px-4 py-3">وضعیت فعلی</th>
+                )}
+                {access.canView('field_requested_weight') && (
+                  <th className="text-right font-normal px-4 py-3">وزن درخواستی</th>
+                )}
+                {access.canView('field_produced_weight') && (
+                  <th className="text-right font-normal px-4 py-3">وزن مؤثر</th>
+                )}
+                {access.canView('field_order_total') && (
+                  <th className="text-right font-normal px-4 py-3">مبلغ فاکتور</th>
+                )}
+                {access.canView('field_driver_assignment') && (
+                  <th className="text-right font-normal px-4 py-3">راننده</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -216,27 +252,41 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({ orders, onPrintAll }) 
                 const effTotal = order.items.reduce((s, i) => s + getFinanceWeight(i), 0);
                 return (
                   <tr key={order.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="tabular-nums px-4 py-3 font-bold text-[#0056b3]">
-                      {order.code}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-slate-900">
-                      {order.customerName}
-                    </td>
-                    <td className="px-4 py-3 text-xs font-semibold text-slate-700">
-                      {getStatusLabel(order.status)}
-                    </td>
-                    <td className="tabular-nums px-4 py-3 text-slate-600">
-                      {formatWeight(reqTotal)}
-                    </td>
-                    <td className="tabular-nums px-4 py-3 font-medium text-slate-900">
-                      {formatWeight(effTotal)}
-                    </td>
-                    <td className="tabular-nums px-4 py-3 font-semibold text-[#0f5864]">
-                      {formatRial(calculateOrderTotal(order))}
-                    </td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {order.driverName || '—'}
-                    </td>
+                    {access.canView('field_order_code') && (
+                      <td className="tabular-nums px-4 py-3 font-bold text-[#0056b3]">
+                        {order.code}
+                      </td>
+                    )}
+                    {access.canView('field_customer_name') && (
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        {order.customerName}
+                      </td>
+                    )}
+                    {access.canView('field_order_status') && (
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-700">
+                        {getStatusLabel(order.status)}
+                      </td>
+                    )}
+                    {access.canView('field_requested_weight') && (
+                      <td className="tabular-nums px-4 py-3 text-slate-600">
+                        {formatWeight(reqTotal)}
+                      </td>
+                    )}
+                    {access.canView('field_produced_weight') && (
+                      <td className="tabular-nums px-4 py-3 font-medium text-slate-900">
+                        {formatWeight(effTotal)}
+                      </td>
+                    )}
+                    {access.canView('field_order_total') && (
+                      <td className="tabular-nums px-4 py-3 font-semibold text-[#0f5864]">
+                        {formatRial(calculateOrderTotal(order))}
+                      </td>
+                    )}
+                    {access.canView('field_driver_assignment') && (
+                      <td className="px-4 py-3 text-slate-600">
+                        {order.driverName || '—'}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

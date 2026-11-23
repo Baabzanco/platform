@@ -46,8 +46,6 @@ export function formatDuration(seconds: number): string {
 
 export function getStatusLabel(status: OrderStatus): string {
   switch (status) {
-    case 'pending_production_approval':
-      return 'در انتظار تایید تولید';
     case 'in_production':
       return 'در حال تولید و توزین';
     case 'pending_finance_approval':
@@ -69,10 +67,7 @@ export function buildPreparationSummary(orders: Order[]): {
   rows: PrepProductRow[];
   maxColumns: number;
 } {
-  const activeOrders = orders.filter(
-    (order) =>
-      order.status === 'pending_production_approval' || order.status === 'in_production'
-  );
+  const activeOrders = orders.filter((order) => order.status === 'in_production');
 
   const grouped = new Map<string, PrepProductRow>();
 

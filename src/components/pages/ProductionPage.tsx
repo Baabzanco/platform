@@ -4,14 +4,13 @@ import {
   Boxes,
   ChevronLeft,
   ClipboardList,
-  Package,
+  Clock,
   Printer,
   RotateCcw,
   Search,
-  Zap,
 } from 'lucide-react';
-import { DEPARTMENT_LABELS } from '../../data/initialOrders';
 import { Order } from '../../types/order';
+import { AccessControlHelpers } from '../../types/permissions';
 import {
   buildPreparationSummary,
   formatWeight,
@@ -20,12 +19,18 @@ import {
 interface ProductionPageProps {
   orders: Order[];
   printingOrderId: string | null;
+  access: AccessControlHelpers;
   onPrintAll: () => void;
   onSelectOrder: (orderId: string) => void;
 }
 
 type ProdTab = 'orders' | 'prep';
-type ProdFilter = 'all' | 'pending' | 'in_progress' | 'completed' | 'returned' | 'rejected';
+type ProdFilter =
+  | 'all'
+  | 'in_progress'
+  | 'completed'
+  | 'returned'
+  | 'rejected';
 
 function isCompletedInProd(order: Order): boolean {
   return (
@@ -44,40 +49,15 @@ function isPendingReturnConfirmInProd(order: Order): boolean {
 }
 
 function isProdPriority(order: Order): boolean {
-  return isPendingReturnConfirmInProd(order) || order.status === 'in_production';
+  return isPendingReturnConfirmInProd(order);
 }
 
 function getProductionSortRank(order: Order): number {
   if (isPendingReturnConfirmInProd(order)) return 0;
   if (order.status === 'in_production') return 1;
-  if (order.status === 'pending_production_approval') return 2;
-  if (isCompletedInProd(order)) return 3;
-  if (order.status === 'returned') return 4;
-  return 5;
-}
-
-function getProductionStatusDisplay(order: Order): { label: string; className: string } {
-  if (order.status === 'rejected') {
-    const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
-    return { label: `رد شده (${src})`, className: 'text-red-700' };
-  }
-  if (order.status === 'returned') {
-    const confirmed = order.returnRecord?.confirmations.production.confirmed;
-    return confirmed
-      ? { label: 'مرجوعی تایید شده', className: 'text-emerald-700' }
-      : { label: 'مرجوع شده — نیازمند تایید تولید', className: 'text-red-700' };
-  }
-  if (order.status === 'in_production') {
-    const weighed = order.items.filter((i) => i.producedWeight !== null).length;
-    return {
-      label: `در حال توزین (${weighed} از ${order.items.length})`,
-      className: 'text-[#0f5864]',
-    };
-  }
-  if (isCompletedInProd(order)) {
-    return { label: 'تولید تکمیل و ارسال به صدور فاکتور', className: 'text-emerald-700' };
-  }
-  return { label: 'در انتظار تایید تولید', className: 'text-slate-600' };
+  if (isCompletedInProd(order)) return 2;
+  if (order.status === 'returned') return 3;
+  return 4;
 }
 
 export const ProductionPage: React.FC<ProductionPageProps> = ({
@@ -95,7 +75,6 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
     const filtered = orders.filter((order) => {
       const matchesFilter =
         statusFilter === 'all' ||
-        (statusFilter === 'pending' && order.status === 'pending_production_approval') ||
         (statusFilter === 'in_progress' && order.status === 'in_production') ||
         (statusFilter === 'completed' && isCompletedInProd(order)) ||
         (statusFilter === 'returned' && order.status === 'returned') ||
@@ -129,114 +108,120 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
   const prepSummary = useMemo(() => buildPreparationSummary(orders), [orders]);
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
       {/* Top Header */}
-      <header className="no-print flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-[13px] text-slate-500">
-          <span>داشبورد مدیریت</span>
-          <ChevronLeft className="w-4 h-4 text-slate-400" />
-          <span className="font-bold text-slate-800">بخش تولید</span>
+      <header className="no-print flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-1.5 text-sm sm:text-[13px] text-slate-500">
+          <span className="hidden sm:inline">داشبورد مدیریت</span>
+          <ChevronLeft className="hidden sm:inline w-4 h-4 text-slate-400" />
+          <h1 className="font-bold text-slate-900 text-base sm:text-[14px]">
+            بخش تولید
+          </h1>
         </div>
 
         <button
           type="button"
           onClick={onPrintAll}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap shrink-0"
+          title="پرینت تمامی سفارشات"
+          className="min-h-[40px] sm:min-h-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-lg text-xs font-bold bg-white text-[#0f5864] border border-[#0f5864] hover:bg-[#0f5864] hover:text-white transition-colors whitespace-nowrap shrink-0"
         >
           <Printer className="w-4 h-4" />
-          پرینت تمامی سفارشات
+          <span className="hidden sm:inline">پرینت تمامی سفارشات</span>
+          <span className="sm:hidden">پرینت</span>
         </button>
       </header>
 
-      {/* Internal Tabs */}
-      <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b border-slate-200">
-        <div className="flex items-center gap-2">
+      {/* Internal Tabs (Segmented 2-col on mobile, clean underline tabs on desktop) */}
+      <div className="no-print flex flex-col gap-3">
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 p-1 sm:p-0 bg-slate-200/75 sm:bg-transparent rounded-xl sm:rounded-none sm:border-b sm:border-slate-200">
           <button
             type="button"
             onClick={() => setActiveTab('orders')}
-            className={`relative px-4 py-2.5 text-sm font-bold flex items-center gap-2 transition-colors whitespace-nowrap ${
+            className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap ${
               activeTab === 'orders'
-                ? 'text-[#0f5864]'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
+                : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
             }`}
           >
-            <ClipboardList className="w-4 h-4" />
+            <ClipboardList className="w-4 h-4 shrink-0" />
             <span>لیست سفارشات</span>
-            <span className="tabular-nums text-xs font-medium text-slate-400">
+            <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
               ({orders.length})
             </span>
             {activeTab === 'orders' && (
-              <span className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
+              <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
             )}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('prep')}
-            className={`relative px-4 py-2.5 text-sm font-bold flex items-center gap-2 transition-colors whitespace-nowrap ${
+            className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap ${
               activeTab === 'prep'
-                ? 'text-[#0f5864]'
-                : 'text-slate-500 hover:text-slate-800'
+                ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
+                : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
             }`}
           >
-            <Boxes className="w-4 h-4" />
-            <span>نیاز به آماده سازی</span>
-            <span className="tabular-nums text-xs font-medium text-slate-400">
+            <Boxes className="w-4 h-4 shrink-0" />
+            <span>نیاز به آماده‌سازی</span>
+            <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
               ({prepSummary.rows.length})
             </span>
             {activeTab === 'prep' && (
-              <span className="absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
+              <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
             )}
           </button>
         </div>
 
+        {/* Search & Scrollable Filters */}
         {activeTab === 'orders' && (
-          <div className="flex flex-wrap items-center gap-2 pb-2">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
             <div className="relative">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Search className="w-4 h-4 sm:w-3.5 sm:h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="جستجو کد سفارش یا محصول..."
-                className="w-56 pr-8 pl-3 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-[#0f5864]"
+                placeholder="جستجو کد سفارش یا نام محصول..."
+                className="w-full sm:w-64 h-11 sm:h-9 pr-9 sm:pr-8 pl-3 text-sm sm:text-xs bg-white border border-slate-200 rounded-xl sm:rounded-lg focus:outline-none focus:border-[#0f5864]"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-1 p-1 bg-slate-200/70 rounded-lg">
-              {(
-                [
-                  { id: 'all', label: 'همه' },
-                  { id: 'in_progress', label: 'در حال توزین' },
-                  { id: 'pending', label: 'در انتظار تایید' },
-                  { id: 'completed', label: 'ارسال به صدور فاکتور' },
-                  { id: 'returned', label: 'مرجوعی' },
-                  { id: 'rejected', label: 'رد شده' },
-                ] as Array<{ id: ProdFilter; label: string }>
-              ).map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => setStatusFilter(f.id)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors whitespace-nowrap shrink-0 ${
-                    statusFilter === f.id
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+            <div className="overflow-x-auto no-scrollbar -mx-1 px-1">
+              <div className="inline-flex items-center gap-1 p-1 bg-slate-200/75 rounded-xl sm:rounded-lg">
+                {(
+                  [
+                    { id: 'all', label: 'همه' },
+                    { id: 'in_progress', label: 'آماده توزین' },
+                    { id: 'completed', label: 'ارسال به فاکتور' },
+                    { id: 'returned', label: 'مرجوعی' },
+                    { id: 'rejected', label: 'رد شده' },
+                  ] as Array<{ id: ProdFilter; label: string }>
+                ).map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setStatusFilter(f.id)}
+                    className={`min-h-[36px] sm:min-h-0 px-3 py-1.5 text-xs font-semibold rounded-lg sm:rounded-md transition-colors whitespace-nowrap shrink-0 ${
+                      statusFilter === f.id
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* Tab 1: Collapsed Order Cards (Click to open popup) */}
+      {/* Tab 1: Mobile-First Collapsed Order Cards */}
       {activeTab === 'orders' && (
         <div className="flex flex-col gap-3">
           {sortedAndFilteredOrders.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-lg p-10 text-center">
+            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
               <p className="text-sm font-medium text-slate-600 mb-3">
                 {orders.length === 0
                   ? 'در این تاریخ هیچ سفارشی ثبت نشده است.'
@@ -249,7 +234,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                     setSearchQuery('');
                     setStatusFilter('all');
                   }}
-                  className="px-4 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-lg hover:bg-[#0f5864] hover:text-white transition-colors"
+                  className="min-h-[44px] px-5 py-2 text-xs font-semibold text-[#0f5864] bg-white border border-[#0f5864] rounded-xl hover:bg-[#0f5864] hover:text-white transition-colors"
                 >
                   نمایش همه سفارش‌ها
                 </button>
@@ -261,27 +246,22 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
               const rejected = order.status === 'rejected';
               const returned = order.status === 'returned';
               const pendingReturnConfirm = isPendingReturnConfirmInProd(order);
-              const inProduction = order.status === 'in_production';
-              const weighedCount = order.items.filter((i) => i.producedWeight !== null).length;
-              const totalReqKg = order.items.reduce((s, i) => s + i.requestedWeight, 0);
-              const statusDisplay = getProductionStatusDisplay(order);
 
-              const showOtherDivider = priorityCount > 0 && index === priorityCount;
+              const showOtherDivider =
+                priorityCount > 0 && index === priorityCount;
 
               const cardStyle = pendingReturnConfirm
-                ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20 hover:bg-red-50/30'
+                ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
                 : rejected || returned
-                  ? 'border border-red-300 bg-red-50/20 hover:border-red-400'
-                  : inProduction
-                    ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15 hover:bg-[#f4fafa]'
-                    : completed
-                      ? 'border border-emerald-400 bg-emerald-50/25 hover:border-emerald-500'
-                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864] hover:shadow-xs';
+                  ? 'border border-red-300 bg-red-50/20'
+                  : completed
+                    ? 'border border-emerald-400 bg-emerald-50/25'
+                    : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
               return (
                 <React.Fragment key={order.id}>
                   {showOtherDivider && (
-                    <div className="no-print flex items-center gap-3 pt-2">
+                    <div className="no-print flex items-center gap-3 pt-1">
                       <span className="text-xs font-bold text-slate-500 whitespace-nowrap">
                         سایر سفارش‌ها
                       </span>
@@ -292,43 +272,35 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                   <article
                     className={`order-card-printable ${
                       printingOrderId === order.id ? 'print-target' : ''
-                    } rounded-lg overflow-hidden transition-all ${cardStyle}`}
+                    } rounded-2xl sm:rounded-xl overflow-hidden transition-all ${cardStyle}`}
                   >
-                    {/* Clickable Collapsed Summary Surface */}
                     <button
                       type="button"
                       onClick={() => onSelectOrder(order.id)}
-                      className="w-full text-right block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
+                      className="w-full text-right block active:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
                     >
                       {pendingReturnConfirm && (
-                        <div className="no-print px-5 py-1.5 bg-red-600 text-white flex items-center justify-between gap-2 text-xs font-bold">
-                          <span className="inline-flex items-center gap-2">
+                        <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                          <span className="inline-flex items-center gap-1.5">
                             <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                            اولویت فوری — سفارش مرجوع شده و نیازمند تایید مرجوعی در تولید
+                            اولویت فوری — سفارش مرجوعی نیازمند تایید تولید
                           </span>
-                          <span className="opacity-95 text-[11px]">کلیک برای اقدام</span>
+                          <span className="opacity-95 text-[11px]">لمس برای تایید</span>
                         </div>
                       )}
 
-                      {inProduction && (
-                        <div className="no-print px-5 py-1.5 bg-[#0f5864] text-white flex items-center justify-between gap-2 text-xs font-bold">
-                          <span className="inline-flex items-center gap-2">
-                            <Zap className="w-3.5 h-3.5 shrink-0" />
-                            در پروسه اقدام تولید — اولویت ثبت وزن اقلام
-                          </span>
-                          <span className="tabular-nums opacity-95 text-[11px]">
-                            توزین: {weighedCount} از {order.items.length} قلم
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-4">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 flex-1 items-center text-[13px]">
+                      {/* Responsive Card Body (Only Order Code & Delivery Slot) */}
+                      <div className="p-4 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-6 sm:gap-x-10 gap-y-2.5 flex-1 items-center text-[13px]">
                           <div>
-                            <span className="block text-[11px] text-slate-500 mb-0.5">کد سفارش</span>
+                            <span className="block text-[11px] text-slate-500 mb-0.5">
+                              کد سفارش
+                            </span>
                             <span
-                              className={`tabular-nums text-[15px] font-bold ${
-                                rejected || returned ? 'text-red-700' : 'text-[#0056b3]'
+                              className={`tabular-nums text-base font-bold ${
+                                rejected || returned
+                                  ? 'text-red-700'
+                                  : 'text-[#0056b3]'
                               }`}
                             >
                               {order.code}
@@ -336,28 +308,18 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                           </div>
 
                           <div>
-                            <span className="block text-[11px] text-slate-500 mb-0.5">بازه ارسال</span>
-                            <span className="font-semibold text-slate-800">{order.deliverySlot}</span>
-                          </div>
-
-                          <div>
-                            <span className="block text-[11px] text-slate-500 mb-0.5">اقلام و وزن کل</span>
-                            <span className="tabular-nums font-medium text-slate-700 inline-flex items-center gap-1.5">
-                              <Package className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              {order.items.length} قلم · {formatWeight(totalReqKg)}
+                            <span className="block text-[11px] text-slate-500 mb-0.5">
+                              بازه ارسال
                             </span>
-                          </div>
-
-                          <div>
-                            <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت</span>
-                            <span className={`font-bold text-xs ${statusDisplay.className}`}>
-                              {statusDisplay.label}
+                            <span className="font-semibold text-slate-800 inline-flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              {order.deliverySlot}
                             </span>
                           </div>
                         </div>
 
-                        <div className="no-print inline-flex items-center gap-1.5 text-xs font-semibold text-[#0f5864] shrink-0">
-                          <span>مشاهده و اقدام</span>
+                        <div className="no-print pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex items-center justify-between sm:justify-end gap-1.5 text-xs font-bold text-[#0f5864] shrink-0">
+                          <span>مشاهده و ثبت وزن</span>
                           <ChevronLeft className="w-4 h-4" />
                         </div>
                       </div>
@@ -407,39 +369,39 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
             <p className="inline-flex items-center gap-1.5">
               <ArrowLeftRight className="w-3.5 h-3.5 text-[#0f5864] shrink-0" />
-              برای مشاهده تمام ستون‌های سفارش‌ها، جدول را به صورت افقی اسکرول کنید (ستون نام محصول و مجموع ثابت می‌مانند).
+              جدول را افقی اسکرول کنید (نام محصول و مجموع ثابت می‌مانند).
             </p>
             <span className="tabular-nums font-semibold text-[#0f5864]">
               {prepSummary.rows.length} محصول · حداکثر {prepSummary.maxColumns} سفارش هم‌زمان
             </span>
           </div>
 
-          <div className="bg-white border border-[#7a9cbf] rounded-lg overflow-x-auto shadow-xs">
+          <div className="bg-white border border-[#7a9cbf] rounded-xl overflow-x-auto shadow-xs">
             {prepSummary.rows.length === 0 ? (
               <div className="p-10 text-center text-sm text-slate-500">
                 تمامی سفارش‌های صف تولید تکمیل یا تعیین‌تکلیف شده‌اند؛ موردی برای آماده‌سازی باقی نمانده است.
               </div>
             ) : (
-              <table className="w-max min-w-full border-collapse text-[13px] text-center">
+              <table className="w-max min-w-full border-collapse text-xs sm:text-[13px] text-center">
                 <thead>
                   <tr className="bg-slate-50 text-[#0f5864] border-b border-slate-200">
-                    <th className="sticky right-0 z-20 bg-slate-50 text-right font-bold px-5 py-3.5 border-l-2 border-slate-200 whitespace-nowrap min-w-[180px]">
+                    <th className="sticky right-0 z-20 bg-slate-50 text-right font-bold px-3 sm:px-5 py-3 border-l-2 border-slate-200 whitespace-nowrap min-w-[125px] sm:min-w-[180px]">
                       نام محصول
                     </th>
                     {Array.from({ length: prepSummary.maxColumns }).map((_, colIdx) => (
                       <React.Fragment key={colIdx}>
-                        <th className="font-bold px-4 py-3.5 border-l border-slate-100 whitespace-nowrap min-w-[88px]">
+                        <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[76px] sm:min-w-[88px]">
                           وزن {colIdx + 1}
                         </th>
-                        <th className="font-bold px-4 py-3.5 border-l border-slate-100 whitespace-nowrap min-w-[96px]">
+                        <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[84px] sm:min-w-[96px]">
                           بازه {colIdx + 1}
                         </th>
-                        <th className="font-bold px-4 py-3.5 border-l-2 border-slate-200 whitespace-nowrap min-w-[96px]">
+                        <th className="font-bold px-3 sm:px-4 py-3 border-l-2 border-slate-200 whitespace-nowrap min-w-[84px] sm:min-w-[96px]">
                           کد {colIdx + 1}
                         </th>
                       </React.Fragment>
                     ))}
-                    <th className="sticky left-0 z-20 font-bold px-5 py-3.5 bg-emerald-50 text-emerald-800 border-r-2 border-emerald-200 whitespace-nowrap min-w-[110px]">
+                    <th className="sticky left-0 z-20 font-bold px-3 sm:px-5 py-3 bg-emerald-50 text-emerald-800 border-r-2 border-emerald-200 whitespace-nowrap min-w-[88px] sm:min-w-[110px]">
                       مجموع (kg)
                     </th>
                   </tr>
@@ -447,7 +409,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                 <tbody className="divide-y divide-slate-100">
                   {prepSummary.rows.map((row) => (
                     <tr key={row.productName} className="group hover:bg-slate-50/90 transition-colors">
-                      <td className="sticky right-0 z-10 bg-white group-hover:bg-slate-50 text-right font-bold px-5 py-3.5 border-l-2 border-slate-200 text-slate-900 whitespace-nowrap">
+                      <td className="sticky right-0 z-10 bg-white group-hover:bg-slate-50 text-right font-bold px-3 sm:px-5 py-3 border-l-2 border-slate-200 text-slate-900 whitespace-nowrap">
                         {row.productName}
                       </td>
                       {Array.from({ length: prepSummary.maxColumns }).map((_, colIdx) => {
@@ -455,30 +417,30 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                         if (!alloc) {
                           return (
                             <React.Fragment key={colIdx}>
-                              <td className="px-4 py-3.5 border-l border-slate-100 text-slate-300">—</td>
-                              <td className="px-4 py-3.5 border-l border-slate-100 text-slate-300">—</td>
-                              <td className="px-4 py-3.5 border-l-2 border-slate-200 text-slate-300">—</td>
+                              <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">—</td>
+                              <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">—</td>
+                              <td className="px-3 sm:px-4 py-3 border-l-2 border-slate-200 text-slate-300">—</td>
                             </React.Fragment>
                           );
                         }
                         return (
                           <React.Fragment key={alloc.orderId}>
-                            <td className="tabular-nums px-4 py-3.5 border-l border-slate-100 font-semibold text-slate-800 whitespace-nowrap">
+                            <td className="tabular-nums px-3 sm:px-4 py-3 border-l border-slate-100 font-semibold text-slate-800 whitespace-nowrap">
                               {alloc.requestedWeight} kg
                               {alloc.producedWeight !== null && (
-                                <span className="block text-[11px] font-normal text-emerald-700">
+                                <span className="block text-[10px] font-normal text-emerald-700">
                                   توزین: {alloc.producedWeight}
                                 </span>
                               )}
                             </td>
-                            <td className="px-4 py-3.5 border-l border-slate-100 text-slate-600 whitespace-nowrap">
+                            <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-600 whitespace-nowrap">
                               {alloc.deliverySlot}
                             </td>
-                            <td className="tabular-nums px-4 py-3.5 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap">
+                            <td className="tabular-nums px-3 sm:px-4 py-3 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => onSelectOrder(alloc.orderId)}
-                                className="hover:underline text-[#0056b3] font-bold"
+                                className="min-h-[36px] px-2 hover:underline text-[#0056b3] font-bold"
                               >
                                 {alloc.orderCode}
                               </button>
@@ -486,7 +448,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                           </React.Fragment>
                         );
                       })}
-                      <td className="sticky left-0 z-10 tabular-nums px-5 py-3.5 bg-emerald-50 text-emerald-800 border-r-2 border-emerald-200 font-bold whitespace-nowrap">
+                      <td className="sticky left-0 z-10 tabular-nums px-3 sm:px-5 py-3 bg-emerald-50 text-emerald-800 border-r-2 border-emerald-200 font-bold whitespace-nowrap">
                         {row.totalRequestedWeight} kg
                       </td>
                     </tr>

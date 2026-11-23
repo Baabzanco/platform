@@ -22,6 +22,10 @@ function normalizeOrders(orders: Order[]): Order[] {
   return orders.map((order, idx) => {
     const normalized: Order = {
       ...order,
+      status:
+        (order.status as string) === 'pending_production_approval'
+          ? 'in_production'
+          : order.status,
       district: order.district || 'محدوده تهران',
       routeOrder: typeof order.routeOrder === 'number' ? order.routeOrder : idx + 1,
       deliveryDate: order.deliveryDate || DEFAULT_SELECTED_DATE_KEY,
@@ -163,19 +167,7 @@ export function useOrderStore() {
     []
   );
 
-  // 1. Production: approve order for weighing
-  const approveProductionOrder = useCallback((orderId: string) => {
-    const now = Date.now();
-    setOrders((prev) =>
-      prev.map((order) =>
-        order.id === orderId && order.status === 'pending_production_approval'
-          ? { ...order, status: 'in_production', lastActionAt: now }
-          : order
-      )
-    );
-  }, []);
-
-  // 2. Production: record exact produced weight for an item
+  // 1. Production: record exact produced weight for an item
   const recordItemWeight = useCallback(
     (orderId: string, itemId: string, weight: number) => {
       const now = Date.now();
@@ -549,6 +541,14 @@ export function useOrderStore() {
         prev.map((order) => {
           if (order.id !== orderId) return order;
           const existing = order.driverDelivery ?? { sentToFinance: false };
+          const nextRejectedDocs = existing.rejectedDocs
+            ? {
+                ...existing.rejectedDocs,
+                ...(docType === 'invoice'
+                  ? { invoice: false }
+                  : { paymentReceipt: false }),
+              }
+            : undefined;
           return {
             ...order,
             driverDelivery: {
@@ -556,6 +556,7 @@ export function useOrderStore() {
               ...(docType === 'invoice'
                 ? { invoicePhoto: photo }
                 : { paymentReceiptPhoto: photo }),
+              ...(nextRejectedDocs ? { rejectedDocs: nextRejectedDocs } : {}),
             },
           };
         })
@@ -615,6 +616,7 @@ export function useOrderStore() {
         return;
       }
 
+      const wasRejected = Boolean(target.driverDelivery?.financeRejected);
       const now = Date.now();
       const stamp = formatTimeStamp();
 
@@ -625,17 +627,23 @@ export function useOrderStore() {
             ...order,
             lastActionAt: now,
             driverDelivery: {
-              ...order.driverDelivery!,
+              invoicePhoto: order.driverDelivery!.invoicePhoto,
+              paymentReceiptPhoto: order.driverDelivery!.paymentReceiptPhoto,
               completedAt: stamp,
               sentToFinance: true,
               financeVerified: false,
+              financeRejected: false,
             },
           };
         })
       );
 
-      const title = `اتمام تحویل و ارسال مدارک — سفارش ${target.code}`;
-      const message = `عکس فاکتور و رسید پرداخت سفارش ${target.code} (${target.district}) توسط راننده ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`;
+      const title = wasRejected
+        ? `ارسال مجدد مدارک تحویل — سفارش ${target.code}`
+        : `اتمام تحویل و ارسال مدارک — سفارش ${target.code}`;
+      const message = wasRejected
+        ? `عکس جدید مدارک سفارش ${target.code} (${target.district}) توسط راننده مجدداً ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`
+        : `عکس فاکتور و رسید پرداخت سفارش ${target.code} (${target.district}) توسط راننده ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`;
       pushToast(title, message, 'ارسال به بخش صدور فاکتور', 'success');
       queueDeptNotification('finance', title, message, 'success');
     },
@@ -658,6 +666,9 @@ export function useOrderStore() {
               ...order.driverDelivery,
               financeVerified: true,
               financeVerifiedAt: stamp,
+              financeRejected: false,
+              financeRejectionReason: undefined,
+              rejectedDocs: undefined,
             },
           };
         })
@@ -668,6 +679,48 @@ export function useOrderStore() {
         `عکس فاکتور و رسید پرداخت ارسال‌شده توسط راننده برای سفارش ${target.code} در بخش صدور فاکتور تایید نهایی شد.`,
         'بخش صدور فاکتور',
         'success'
+      );
+    },
+    [orders, pushToast]
+  );
+
+  // 15b. Invoice Issuance: reject driver-submitted delivery photos with reason -> red priority in Driver Panel
+  const rejectDriverDocumentsInFinance = useCallback(
+    (
+      orderId: string,
+      reason: string,
+      rejectedDocs: { invoice: boolean; paymentReceipt: boolean }
+    ) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target || !target.driverDelivery) return;
+
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId || !order.driverDelivery) return order;
+          return {
+            ...order,
+            lastActionAt: now,
+            driverDelivery: {
+              ...order.driverDelivery,
+              sentToFinance: false,
+              financeVerified: false,
+              financeRejected: true,
+              financeRejectionReason: reason,
+              financeRejectedAt: stamp,
+              rejectedDocs,
+            },
+          };
+        })
+      );
+
+      pushToast(
+        `مدارک تحویل رد شد — سفارش ${target.code}`,
+        `مدارک سفارش ${target.code} رد شد و به‌صورت قرمز در اولویت اول پنل رانندگان جهت عکاسی مجدد قرار گرفت. دلیل: ${reason}`,
+        'ارجاع فوری به راننده',
+        'danger'
       );
     },
     [orders, pushToast]
@@ -694,7 +747,6 @@ export function useOrderStore() {
     pushToast,
     flushDeptNotifications,
     markDateSeenByDept,
-    approveProductionOrder,
     recordItemWeight,
     completeProduction,
     approveFinance,
@@ -709,6 +761,7 @@ export function useOrderStore() {
     removeDriverDocument,
     completeDriverDelivery,
     verifyDriverDocumentsInFinance,
+    rejectDriverDocumentsInFinance,
     resetDemoData,
   };
 }

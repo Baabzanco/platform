@@ -7,6 +7,7 @@ import { formatWeight } from '../utils/formatters';
 interface ReturnResolutionBoxProps {
   returnRecord: ReturnRecord;
   currentDept: WorkflowDepartment;
+  canEditConfirm?: boolean;
   onConfirmReturn: () => void;
   extraSummary?: React.ReactNode;
 }
@@ -16,6 +17,7 @@ const ALL_DEPTS: WorkflowDepartment[] = ['production', 'finance', 'shipping'];
 export const ReturnResolutionBox: React.FC<ReturnResolutionBoxProps> = ({
   returnRecord,
   currentDept,
+  canEditConfirm = true,
   onConfirmReturn,
   extraSummary,
 }) => {
@@ -59,8 +61,10 @@ export const ReturnResolutionBox: React.FC<ReturnResolutionBoxProps> = ({
           ) : (
             <button
               type="button"
+              disabled={!canEditConfirm}
+              title={!canEditConfirm ? 'عدم دسترسی ویرایش/تایید مرجوعی' : undefined}
               onClick={onConfirmReturn}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold bg-red-600 text-white hover:bg-red-700 shadow-xs transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-xs font-bold bg-red-600 text-white hover:bg-red-700 disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed shadow-xs transition-colors whitespace-nowrap"
             >
               <CheckCircle2 className="w-4 h-4 shrink-0" />
               تایید مرجوعی ({DEPARTMENT_LABELS[currentDept]})

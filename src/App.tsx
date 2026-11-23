@@ -12,22 +12,32 @@ import { OrderDetailModal } from './components/modals/OrderDetailModal';
 import {
   DeliveryModal,
   DiscrepancyModal,
+  DriverDocsRejectModal,
   RejectModal,
   ResetConfirmModal,
   ReturnModal,
   WeightModal,
 } from './components/modals/OrderModals';
+import { AccessControlPage } from './components/pages/AccessControlPage';
 import { DriverPage } from './components/pages/DriverPage';
 import { FinancePage } from './components/pages/FinancePage';
 import { ProductionPage } from './components/pages/ProductionPage';
 import { ReportsPage } from './components/pages/ReportsPage';
 import { ShippingPage } from './components/pages/ShippingPage';
+import { useAccessControl } from './hooks/useAccessControl';
 import { useOrderStore } from './hooks/useOrderStore';
 import { Department, Order, OrderItem, WorkflowDepartment } from './types/order';
+import { AccessControlHelpers } from './types/permissions';
 import {
   DEFAULT_SELECTED_DATE_KEY,
   getWeekDays,
 } from './utils/jalaliCalendar';
+
+// Access control is in view/configuration mode only right now (not enforced on pages)
+const FULL_ACCESS: AccessControlHelpers = {
+  canView: () => true,
+  canEdit: () => true,
+};
 
 export default function App() {
   const {
@@ -38,7 +48,6 @@ export default function App() {
     pushToast,
     flushDeptNotifications,
     markDateSeenByDept,
-    approveProductionOrder,
     recordItemWeight,
     completeProduction,
     approveFinance,
@@ -53,8 +62,24 @@ export default function App() {
     removeDriverDocument,
     completeDriverDelivery,
     verifyDriverDocumentsInFinance,
+    rejectDriverDocumentsInFinance,
     resetDemoData,
   } = useOrderStore();
+
+  const {
+    groups,
+    users,
+    toggleGroupPermission,
+    setGroupSubgroupPermissions,
+    setGroupCategoryPermissions,
+    applyPresetToGroup,
+    createGroup,
+    deleteGroup,
+    createUser,
+    assignUserToGroup,
+    deleteUser,
+    resetAccessControl,
+  } = useAccessControl();
 
   const [activePage, setActivePage] = useState<Department>('production');
   const [weekOffset, setWeekOffset] = useState<number>(0);
@@ -73,6 +98,8 @@ export default function App() {
     order: Order;
     source: WorkflowDepartment;
   } | null>(null);
+  const [rejectDriverDocsOrder, setRejectDriverDocsOrder] =
+    useState<Order | null>(null);
   const [discrepancyOrder, setDiscrepancyOrder] = useState<Order | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<Order | null>(null);
   const [returnOrder, setReturnOrder] = useState<Order | null>(null);
@@ -118,6 +145,17 @@ export default function App() {
     [orders, selectedDateKey]
   );
 
+  // Count of orders with Finance-rejected driver photos (for red Driver nav badge)
+  const rejectedDriverDocsCount = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          order.driverDelivery?.financeRejected &&
+          !order.driverDelivery?.sentToFinance
+      ).length,
+    [orders]
+  );
+
   const selectedOrder =
     selectedOrderId !== null
       ? orders.find((o) => o.id === selectedOrderId) ?? null
@@ -128,7 +166,18 @@ export default function App() {
     const sorted = dayOrders
       .filter((o) => o.status !== 'rejected')
       .slice()
-      .sort((a, b) => a.routeOrder - b.routeOrder);
+      .sort((a, b) => {
+        const aRej =
+          a.driverDelivery?.financeRejected && !a.driverDelivery?.sentToFinance
+            ? 0
+            : 1;
+        const bRej =
+          b.driverDelivery?.financeRejected && !b.driverDelivery?.sentToFinance
+            ? 0
+            : 1;
+        if (aRej !== bRej) return aRej - bRej;
+        return a.routeOrder - b.routeOrder;
+      });
     const idx = sorted.findIndex((o) => o.id === selectedOrder.id);
     return idx >= 0 ? idx + 1 : 1;
   }, [selectedOrder, activePage, dayOrders]);
@@ -136,6 +185,7 @@ export default function App() {
   const hasSubModalOpen =
     weightTarget !== null ||
     rejectTarget !== null ||
+    rejectDriverDocsOrder !== null ||
     discrepancyOrder !== null ||
     deliveryOrder !== null ||
     returnOrder !== null ||
@@ -203,30 +253,34 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f2f4f7] text-slate-900">
+    <div className="flex h-[100dvh] overflow-hidden bg-[#f2f4f7] text-slate-900">
       <Sidebar
         activePage={activePage}
         onSelectPage={handleSelectPage}
         unreadCounts={unreadCounts}
+        rejectedDriverDocsCount={rejectedDriverDocsCount}
         onRequestReset={() => setResetOpen(true)}
       />
 
-      <main className="print-container flex-1 overflow-y-auto p-5 lg:p-6">
-        <div className="max-w-[1380px] mx-auto w-full flex flex-col gap-4">
+      <main className="print-container flex-1 overflow-y-auto px-3 py-3.5 pb-24 md:p-5 lg:p-6 md:pb-6">
+        <div className="max-w-[1380px] mx-auto w-full flex flex-col gap-3.5 sm:gap-4">
           {/* Top Weekly Daily Calendar Bar */}
-          <DailyCalendarBar
-            days={weekDays}
-            selectedDateKey={selectedDateKey}
-            metricsByDate={metricsByDate}
-            onSelectDate={handleSelectDate}
-            onPrevWeek={() => setWeekOffset((w) => w - 1)}
-            onNextWeek={() => setWeekOffset((w) => w + 1)}
-          />
+          {activePage !== 'access' && (
+            <DailyCalendarBar
+              days={weekDays}
+              selectedDateKey={selectedDateKey}
+              metricsByDate={metricsByDate}
+              onSelectDate={handleSelectDate}
+              onPrevWeek={() => setWeekOffset((w) => w - 1)}
+              onNextWeek={() => setWeekOffset((w) => w + 1)}
+            />
+          )}
 
           {activePage === 'production' && (
             <ProductionPage
               orders={dayOrders}
               printingOrderId={printingOrderId}
+              access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
             />
@@ -236,6 +290,7 @@ export default function App() {
             <FinancePage
               orders={dayOrders}
               printingOrderId={printingOrderId}
+              access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
             />
@@ -245,6 +300,7 @@ export default function App() {
             <ShippingPage
               orders={dayOrders}
               printingOrderId={printingOrderId}
+              access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
             />
@@ -254,6 +310,7 @@ export default function App() {
             <DriverPage
               orders={dayOrders}
               printingOrderId={printingOrderId}
+              access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
               onReorderOrders={reorderDriverOrders}
@@ -270,7 +327,89 @@ export default function App() {
           )}
 
           {activePage === 'reports' && (
-            <ReportsPage orders={dayOrders} onPrintAll={handlePrintAll} />
+            <ReportsPage
+              orders={dayOrders}
+              access={FULL_ACCESS}
+              onPrintAll={handlePrintAll}
+            />
+          )}
+
+          {activePage === 'access' && (
+            <AccessControlPage
+              groups={groups}
+              users={users}
+              onToggleGroupPermission={toggleGroupPermission}
+              onSetGroupSubgroupPermissions={setGroupSubgroupPermissions}
+              onSetGroupCategoryPermissions={setGroupCategoryPermissions}
+              onApplyPresetToGroup={(groupId, preset) => {
+                applyPresetToGroup(groupId, preset);
+                pushToast(
+                  'الگوی دسترسی گروه اعمال شد',
+                  'مجوزهای مشاهده و ویرایش گروه کاربری مطابق الگوی انتخابی به‌روزرسانی شدند.',
+                  'گروه‌های کاربری',
+                  'success'
+                );
+              }}
+              onCreateGroup={(name, description, preset) => {
+                const created = createGroup(name, description, preset);
+                pushToast(
+                  'گروه کاربری جدید ایجاد شد',
+                  `گروه «${created.name}» ایجاد شد و آماده اتصال کاربران است.`,
+                  'گروه‌های کاربری',
+                  'success'
+                );
+                return created;
+              }}
+              onDeleteGroup={(groupId) => {
+                const target = groups.find((g) => g.id === groupId);
+                deleteGroup(groupId);
+                if (target) {
+                  pushToast(
+                    'گروه کاربری حذف شد',
+                    `گروه «${target.name}» حذف شد و اعضای آن به گروه پیش‌فرض منتقل گردیدند.`,
+                    'گروه‌های کاربری',
+                    'warning'
+                  );
+                }
+              }}
+              onCreateUser={(fullName, roleTitle, phone, groupId) => {
+                const created = createUser(fullName, roleTitle, phone, groupId);
+                const groupName =
+                  groups.find((g) => g.id === groupId)?.name ?? '';
+                pushToast(
+                  'کاربر جدید اضافه شد',
+                  `کاربر «${created.fullName}» به گروه «${groupName}» متصل گردید.`,
+                  'گروه‌های کاربری',
+                  'success'
+                );
+                return created;
+              }}
+              onAssignUserToGroup={(userId, groupId) => {
+                const user = users.find((u) => u.id === userId);
+                const group = groups.find((g) => g.id === groupId);
+                assignUserToGroup(userId, groupId);
+                if (user && group) {
+                  pushToast(
+                    'اتصال کاربر به گروه به‌روزرسانی شد',
+                    `کاربر «${user.fullName}» به گروه «${group.name}» متصل گردید.`,
+                    'گروه‌های کاربری',
+                    'info'
+                  );
+                }
+              }}
+              onDeleteUser={(userId) => {
+                const target = users.find((u) => u.id === userId);
+                deleteUser(userId);
+                if (target) {
+                  pushToast(
+                    'کاربر حذف شد',
+                    `کاربر «${target.fullName}» از فهرست کاربران حذف گردید.`,
+                    'گروه‌های کاربری',
+                    'warning'
+                  );
+                }
+              }}
+            />
           )}
         </div>
       </main>
@@ -283,14 +422,15 @@ export default function App() {
         <OrderDetailModal
           order={selectedOrder}
           department={activeWorkflowDept}
+          access={FULL_ACCESS}
           disableEscape={hasSubModalOpen}
           onClose={() => setSelectedOrderId(null)}
           onPrintSingle={handlePrintSingle}
-          onApproveProduction={approveProductionOrder}
           onOpenWeight={(order, item) => setWeightTarget({ order, item })}
           onCompleteProduction={completeProduction}
           onApproveFinance={approveFinance}
           onVerifyDriverDocuments={verifyDriverDocumentsInFinance}
+          onOpenRejectDriverDocs={(order) => setRejectDriverDocsOrder(order)}
           onCallCustomer={handleCallCustomer}
           onSelectDriver={setOrderDriver}
           onOpenDiscrepancy={(order) => setDiscrepancyOrder(order)}
@@ -307,6 +447,7 @@ export default function App() {
         <DriverOrderModal
           order={selectedOrder}
           stopNumber={selectedDriverStopNumber}
+          access={FULL_ACCESS}
           onClose={() => setSelectedOrderId(null)}
           onCallCustomer={handleCallCustomer}
           onUploadDocument={uploadDriverDocument}
@@ -336,6 +477,21 @@ export default function App() {
         onSubmit={(reason) => {
           if (rejectTarget) {
             rejectOrder(rejectTarget.order.id, rejectTarget.source, reason);
+          }
+        }}
+      />
+
+      <DriverDocsRejectModal
+        open={rejectDriverDocsOrder !== null}
+        order={rejectDriverDocsOrder}
+        onClose={() => setRejectDriverDocsOrder(null)}
+        onSubmit={(reason, rejectedDocs) => {
+          if (rejectDriverDocsOrder) {
+            rejectDriverDocumentsInFinance(
+              rejectDriverDocsOrder.id,
+              reason,
+              rejectedDocs
+            );
           }
         }}
       />
@@ -381,6 +537,7 @@ export default function App() {
           setWeekOffset(0);
           setSelectedDateKey(DEFAULT_SELECTED_DATE_KEY);
           resetDemoData();
+          resetAccessControl();
         }}
       />
     </div>

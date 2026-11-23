@@ -1,9 +1,14 @@
-export type Department = 'production' | 'finance' | 'shipping' | 'driver' | 'reports';
+export type Department =
+  | 'production'
+  | 'finance'
+  | 'shipping'
+  | 'driver'
+  | 'reports'
+  | 'access';
 
 export type WorkflowDepartment = 'production' | 'finance' | 'shipping';
 
 export type OrderStatus =
-  | 'pending_production_approval'
   | 'in_production'
   | 'pending_finance_approval'
   | 'finance_discrepancy_review'
@@ -69,6 +74,13 @@ export interface DriverDeliveryRecord {
   sentToFinance: boolean;
   financeVerified?: boolean;
   financeVerifiedAt?: string;
+  financeRejected?: boolean;
+  financeRejectionReason?: string;
+  financeRejectedAt?: string;
+  rejectedDocs?: {
+    invoice?: boolean;
+    paymentReceipt?: boolean;
+  };
 }
 
 export interface Order {

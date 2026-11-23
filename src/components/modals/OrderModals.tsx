@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
+  CameraOff,
   RotateCcw,
   RotateCw,
   Scale,
@@ -29,7 +30,7 @@ const ModalShell: React.FC<BaseModalProps> = ({
   icon,
   children,
   footer,
-  maxWidthClass = 'max-w-[500px]',
+  maxWidthClass = 'max-w-[520px]',
 }) => {
   useEffect(() => {
     if (!open) return;
@@ -53,16 +54,21 @@ const ModalShell: React.FC<BaseModalProps> = ({
     <div
       role="dialog"
       aria-modal="true"
-      className="no-print fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-[1px] flex items-center justify-center p-4"
+      className="no-print fixed inset-0 z-50 bg-slate-900/55 backdrop-blur-[1.5px] flex items-end sm:items-center justify-center p-0 sm:p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className={`bg-white w-full ${maxWidthClass} rounded-xl border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}
+        className={`bg-white w-full ${maxWidthClass} rounded-t-2xl sm:rounded-xl border-t sm:border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92dvh] sm:max-h-[90vh]`}
       >
-        <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3">
-          <h3 className={`text-[15px] font-bold flex items-center gap-2 ${titleColor}`}>
+        {/* Mobile Drag Handle */}
+        <div className="sm:hidden pt-2.5 pb-1 flex justify-center shrink-0">
+          <span className="w-10 h-1.5 rounded-full bg-slate-300" />
+        </div>
+
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 flex items-center justify-between gap-3 shrink-0">
+          <h3 className={`text-[15px] font-bold flex items-center gap-2 leading-snug ${titleColor}`}>
             {icon}
             <span>{title}</span>
           </h3>
@@ -70,13 +76,15 @@ const ModalShell: React.FC<BaseModalProps> = ({
             type="button"
             onClick={onClose}
             aria-label="بستن"
-            className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-100 transition-colors"
+            className="w-10 h-10 -ml-1.5 text-slate-500 hover:text-slate-800 rounded-xl hover:bg-slate-100 flex items-center justify-center transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-5 overflow-y-auto flex-1">{children}</div>
-        <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2.5">
+
+        <div className="p-4 sm:p-5 overflow-y-auto flex-1">{children}</div>
+
+        <div className="px-4 sm:px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pb-safe shrink-0">
           {footer}
         </div>
       </div>
@@ -135,14 +143,14 @@ export const WeightModal: React.FC<WeightModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors whitespace-nowrap"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors whitespace-nowrap"
           >
             انصراف
           </button>
           <button
             type="submit"
             form="weight-modal-form"
-            className="px-4 py-2 text-xs font-semibold text-white bg-[#0f5864] rounded-lg hover:bg-[#0b434d] transition-colors whitespace-nowrap"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-[#0f5864] rounded-xl sm:rounded-lg hover:bg-[#0b434d] transition-colors whitespace-nowrap"
           >
             ثبت وزن
           </button>
@@ -150,21 +158,22 @@ export const WeightModal: React.FC<WeightModalProps> = ({
       }
     >
       <form id="weight-modal-form" onSubmit={handleSubmit} className="space-y-4">
-        <div className="flex items-center justify-between text-xs text-slate-500 pb-3 border-b border-slate-100">
+        <div className="flex items-center justify-between gap-2 text-xs text-slate-500 pb-3 border-b border-slate-100">
           <span>
             محصول: <strong className="text-slate-900 text-sm">{item?.productName}</strong>
           </span>
-          <span className="tabular-nums">سفارش {orderCode}</span>
+          <span className="tabular-nums font-semibold text-[#0056b3]">سفارش {orderCode}</span>
         </div>
 
-        <div className="space-y-1.5">
-          <label htmlFor="prod-exact-weight" className="block text-xs font-medium text-slate-700">
+        <div className="space-y-2">
+          <label htmlFor="prod-exact-weight" className="block text-xs font-semibold text-slate-700">
             وزن دقیق تحویل داده شده (کیلوگرم) — درخواستی:{' '}
-            <span className="tabular-nums font-bold">{item?.requestedWeight} kg</span>
+            <span className="tabular-nums font-bold text-slate-900">{item?.requestedWeight} kg</span>
           </label>
           <input
             id="prod-exact-weight"
             type="number"
+            inputMode="decimal"
             step="0.01"
             min="0.01"
             autoFocus
@@ -174,12 +183,12 @@ export const WeightModal: React.FC<WeightModalProps> = ({
               setError('');
             }}
             placeholder="مثلاً 29.5"
-            className="tabular-nums w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f5864]/30 focus:border-[#0f5864]"
+            className="tabular-nums w-full h-12 sm:h-11 px-3.5 text-base sm:text-sm font-bold border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f5864]/30 focus:border-[#0f5864]"
           />
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 flex items-center gap-1.5">
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </p>
@@ -240,14 +249,14 @@ export const RejectModal: React.FC<RejectModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
           >
             انصراف
           </button>
           <button
             type="submit"
             form="reject-modal-form"
-            className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
           >
             ثبت و رد سفارش
           </button>
@@ -255,7 +264,7 @@ export const RejectModal: React.FC<RejectModalProps> = ({
       }
     >
       <form id="reject-modal-form" onSubmit={handleSubmit} className="space-y-3">
-        <label htmlFor="reject-reason-input" className="block text-xs font-medium text-slate-700">
+        <label htmlFor="reject-reason-input" className="block text-xs font-medium text-slate-700 leading-relaxed">
           لطفاً دلیل و توضیحات رد این سفارش را وارد کنید (به تمامی بخش‌ها اطلاع‌رسانی می‌شود):
         </label>
         <textarea
@@ -268,10 +277,201 @@ export const RejectModal: React.FC<RejectModalProps> = ({
             setError('');
           }}
           placeholder="مثلاً: عدم موجودی کافی در سردخانه یا تایید نشدن اعتبار مالی مشتری..."
-          className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+          className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
         />
         {error && (
-          <p className="text-xs text-red-600 flex items-center gap-1.5">
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </p>
+        )}
+      </form>
+    </ModalShell>
+  );
+};
+
+/* ================= 2b. Reject Driver Documents Modal (Finance -> Driver) ================= */
+interface DriverDocsRejectModalProps {
+  open: boolean;
+  order: Order | null;
+  onClose: () => void;
+  onSubmit: (
+    reason: string,
+    rejectedDocs: { invoice: boolean; paymentReceipt: boolean }
+  ) => void;
+}
+
+const QUICK_DOC_REJECTION_REASONS = [
+  'عکس تار و بی‌کیفیت است و اعداد خوانا نیستند',
+  'مبلغ یا امضای مشتری روی فاکتور مشخص نیست',
+  'تصویر اشتباه بارگذاری شده است',
+  'شماره پیگیری رسید پرداخت خوانا نیست',
+];
+
+export const DriverDocsRejectModal: React.FC<DriverDocsRejectModalProps> = ({
+  open,
+  order,
+  onClose,
+  onSubmit,
+}) => {
+  const [rejectInvoice, setRejectInvoice] = useState(true);
+  const [rejectReceipt, setRejectReceipt] = useState(true);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setRejectInvoice(true);
+      setRejectReceipt(true);
+      setReason('');
+      setError('');
+    }
+  }, [open]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rejectInvoice && !rejectReceipt) {
+      setError('لطفاً حداقل یکی از مدارک (فاکتور یا رسید پرداخت) را برای عکاسی مجدد انتخاب کنید.');
+      return;
+    }
+    if (!reason.trim()) {
+      setError('لطفاً دلیل رد عکس مدارک را برای راننده بنویسید.');
+      return;
+    }
+    onSubmit(reason.trim(), {
+      invoice: rejectInvoice,
+      paymentReceipt: rejectReceipt,
+    });
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      tone="danger"
+      icon={<CameraOff className="w-4 h-4 shrink-0" />}
+      title={`رد عکس مدارک تحویل — سفارش ${order?.code ?? ''}`}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            انصراف
+          </button>
+          <button
+            type="submit"
+            form="driver-docs-reject-form"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
+          >
+            رد مدارک و ارسال فوری به راننده
+          </button>
+        </>
+      }
+    >
+      <form id="driver-docs-reject-form" onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-slate-600 leading-relaxed">
+          پس از ثبت رد، این سفارش به‌صورت <strong className="text-red-700">قرمز و در اولویت اول</strong> پنل راننده نمایش داده می‌شود تا مجدداً عکس گرفته و ارسال کند.
+        </p>
+
+        {/* Select which documents need retake */}
+        <div className="space-y-2">
+          <span className="block text-xs font-bold text-slate-800">
+            کدام مدرک نیازمند عکس مجدد است؟
+          </span>
+          <div className="grid grid-cols-2 gap-2.5">
+            <label
+              className={`min-h-[44px] px-3 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2.5 cursor-pointer transition-colors ${
+                rejectInvoice
+                  ? 'bg-red-50 border-red-400 text-red-900'
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={rejectInvoice}
+                onChange={(e) => {
+                  setRejectInvoice(e.target.checked);
+                  setError('');
+                }}
+                className="w-4 h-4 accent-red-600 rounded"
+              />
+              <span>عکس فاکتور</span>
+            </label>
+
+            <label
+              className={`min-h-[44px] px-3 py-2.5 rounded-xl border text-xs font-semibold flex items-center gap-2.5 cursor-pointer transition-colors ${
+                rejectReceipt
+                  ? 'bg-red-50 border-red-400 text-red-900'
+                  : 'bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={rejectReceipt}
+                onChange={(e) => {
+                  setRejectReceipt(e.target.checked);
+                  setError('');
+                }}
+                className="w-4 h-4 accent-red-600 rounded"
+              />
+              <span>عکس رسید پرداخت</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Quick Reason Suggestions */}
+        <div className="space-y-2">
+          <span className="block text-xs font-medium text-slate-600">
+            دلایل پرتکرار (انتخاب سریع):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_DOC_REJECTION_REASONS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  setReason(preset);
+                  setError('');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors text-right ${
+                  reason === preset
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-red-300 hover:bg-red-50'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Reason Textarea */}
+        <div className="space-y-1.5">
+          <label
+            htmlFor="driver-doc-reject-reason"
+            className="block text-xs font-bold text-slate-800"
+          >
+            دلیل رد مدارک برای نمایش به راننده:
+          </label>
+          <textarea
+            id="driver-doc-reject-reason"
+            rows={3}
+            autoFocus
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError('');
+            }}
+            placeholder="مثلاً: تصویر فاکتور تار است و مبلغ نهایی و امضای مشتری خوانا نیست. لطفاً در نور کافی مجدد عکس بگیرید."
+            className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+          />
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </p>
@@ -348,21 +548,21 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
       open={open}
       onClose={onClose}
       tone="warning"
-      icon={<Scale className="w-4 h-4" />}
-      title={`اصلاح وزن و ارجاع به واحد صدور فاکتور (سفارش ${order?.code ?? ''})`}
+      icon={<Scale className="w-4 h-4 shrink-0" />}
+      title={`اصلاح وزن و ارجاع به صدور فاکتور (سفارش ${order?.code ?? ''})`}
       footer={
         <>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
           >
             انصراف
           </button>
           <button
             type="submit"
             form="discrepancy-modal-form"
-            className="px-4 py-2 text-xs font-semibold text-white bg-amber-600 rounded-lg hover:bg-amber-700 transition-colors"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-amber-600 rounded-xl sm:rounded-lg hover:bg-amber-700 transition-colors"
           >
             ارسال مجدد به واحد صدور فاکتور
           </button>
@@ -380,16 +580,17 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
             return (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5"
+                className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3"
               >
-                <div>
-                  <div className="text-xs font-bold text-slate-900">{item.productName}</div>
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-[13px] font-bold text-slate-900">{item.productName}</div>
                   <div className="tabular-nums text-[11px] text-slate-500 mt-0.5">
-                    وزن ثبت‌شده فعلی: {current} kg
+                    وزن فعلی: {current} kg
                   </div>
                 </div>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   min="0.01"
                   value={weights[item.id] ?? ''}
@@ -397,7 +598,7 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
                     setWeights((prev) => ({ ...prev, [item.id]: e.target.value }));
                     setError('');
                   }}
-                  className="tabular-nums w-28 px-2.5 py-1.5 text-sm bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-600"
+                  className="tabular-nums w-28 h-11 px-3 text-sm font-bold bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-600"
                 />
               </div>
             );
@@ -417,12 +618,12 @@ export const DiscrepancyModal: React.FC<DiscrepancyModalProps> = ({
               setError('');
             }}
             placeholder="مثلاً: وزن باسکول ارسال با وزن ثبت‌شده تولید مغایرت دارد..."
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-600"
+            className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-600"
           />
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 flex items-center gap-1.5">
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </p>
@@ -482,21 +683,21 @@ export const DeliveryModal: React.FC<DeliveryModalProps> = ({
     <ModalShell
       open={open}
       onClose={onClose}
-      icon={<Truck className="w-4 h-4 text-[#0f5864]" />}
+      icon={<Truck className="w-4 h-4 text-[#0f5864] shrink-0" />}
       title={`ثبت وزن نهایی و تحویل به راننده (${order?.driverName ?? ''})`}
       footer={
         <>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
           >
             انصراف
           </button>
           <button
             type="submit"
             form="delivery-modal-form"
-            className="px-4 py-2 text-xs font-semibold text-white bg-[#0f5864] rounded-lg hover:bg-[#0b434d] transition-colors"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-[#0f5864] rounded-xl sm:rounded-lg hover:bg-[#0b434d] transition-colors"
           >
             تایید نهایی و خروج
           </button>
@@ -504,7 +705,7 @@ export const DeliveryModal: React.FC<DeliveryModalProps> = ({
       }
     >
       <form id="delivery-modal-form" onSubmit={handleSubmit} className="space-y-4">
-        <p className="text-xs text-slate-600">
+        <p className="text-xs text-slate-600 leading-relaxed">
           لطفاً وزن دقیق تحویل داده شده به راننده را برای هر محصول تایید یا اصلاح کنید:
         </p>
 
@@ -512,11 +713,12 @@ export const DeliveryModal: React.FC<DeliveryModalProps> = ({
           {order?.items.map((item) => (
             <div
               key={item.id}
-              className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5"
+              className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3"
             >
-              <span className="text-xs font-bold text-slate-900">{item.productName}</span>
+              <span className="text-xs sm:text-[13px] font-bold text-slate-900">{item.productName}</span>
               <input
                 type="number"
+                inputMode="decimal"
                 step="0.01"
                 min="0.01"
                 value={weights[item.id] ?? ''}
@@ -524,14 +726,14 @@ export const DeliveryModal: React.FC<DeliveryModalProps> = ({
                   setWeights((prev) => ({ ...prev, [item.id]: e.target.value }));
                   setError('');
                 }}
-                className="tabular-nums w-28 px-2.5 py-1.5 text-sm bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#0f5864]/30 focus:border-[#0f5864]"
+                className="tabular-nums w-28 h-11 px-3 text-sm font-bold bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f5864]/30 focus:border-[#0f5864]"
               />
             </div>
           ))}
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 flex items-center gap-1.5">
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </p>
@@ -608,21 +810,21 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({
       open={open}
       onClose={onClose}
       tone="danger"
-      icon={<RotateCcw className="w-4 h-4" />}
+      icon={<RotateCcw className="w-4 h-4 shrink-0" />}
       title={`ثبت مرجوعی سفارش ${order?.code ?? ''}`}
       footer={
         <>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
           >
             انصراف
           </button>
           <button
             type="submit"
             form="return-modal-form"
-            className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
           >
             ثبت مرجوعی
           </button>
@@ -640,16 +842,17 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({
             return (
               <div
                 key={item.id}
-                className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3.5 py-2.5"
+                className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3"
               >
-                <div>
-                  <div className="text-xs font-bold text-slate-900">{item.productName}</div>
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-[13px] font-bold text-slate-900">{item.productName}</div>
                   <div className="tabular-nums text-[11px] text-slate-500 mt-0.5">
                     حداکثر مقدار تحویلی: {maxWeight} kg
                   </div>
                 </div>
                 <input
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   min="0"
                   max={maxWeight}
@@ -658,7 +861,7 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({
                     setWeights((prev) => ({ ...prev, [item.id]: e.target.value }));
                     setError('');
                   }}
-                  className="tabular-nums w-28 px-2.5 py-1.5 text-sm bg-white border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                  className="tabular-nums w-28 h-11 px-3 text-sm font-bold bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
                 />
               </div>
             );
@@ -678,12 +881,12 @@ export const ReturnModal: React.FC<ReturnModalProps> = ({
               setError('');
             }}
             placeholder="توضیحات مربوط به علت مرجوعی مشتری را وارد کنید..."
-            className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+            className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
           />
         </div>
 
         {error && (
-          <p className="text-xs text-red-600 flex items-center gap-1.5">
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
             <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </p>
@@ -710,14 +913,14 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
       open={open}
       onClose={onClose}
       tone="danger"
-      icon={<RotateCw className="w-4 h-4" />}
+      icon={<RotateCw className="w-4 h-4 shrink-0" />}
       title="بازنشانی داده‌های سامانه"
       footer={
         <>
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
           >
             انصراف
           </button>
@@ -727,7 +930,7 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
               onConfirm();
               onClose();
             }}
-            className="px-4 py-2 text-xs font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
           >
             بله، بازنشانی شود
           </button>
@@ -735,7 +938,7 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
       }
     >
       <p className="text-sm text-slate-700 leading-relaxed">
-        آیا مطمئن هستید که می‌خواهید تمامی سفارش‌های ثبت‌شده، تغییرات وزن، تاییدها و مرجوعی‌ها را پاک کرده و داده‌های نمونه اولیه را بازگردانی کنید؟
+        آیا مطمئن هستید که می‌خواهید تمامی سفارش‌های ثبت‌شده، تغییرات وزن، تاییدها، مدارک تحویل و مرجوعی‌ها را پاک کرده و داده‌های نمونه اولیه را بازگردانی کنید؟
       </p>
     </ModalShell>
   );
