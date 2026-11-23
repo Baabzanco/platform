@@ -76,6 +76,7 @@ export function buildPreparationSummary(orders: Order[]): {
       const existing = grouped.get(item.productName);
       const allocation = {
         orderId: order.id,
+        itemId: item.id,
         orderCode: order.code,
         deliverySlot: order.deliverySlot,
         requestedWeight: item.requestedWeight,

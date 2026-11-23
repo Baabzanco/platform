@@ -4,7 +4,8 @@ export type Department =
   | 'shipping'
   | 'driver'
   | 'reports'
-  | 'access';
+  | 'access'
+  | 'customers';
 
 export type WorkflowDepartment = 'production' | 'finance' | 'shipping';
 
@@ -146,6 +147,7 @@ export interface UnreadNotification {
 
 export interface PrepAllocation {
   orderId: string;
+  itemId: string;
   orderCode: string;
   deliverySlot: string;
   requestedWeight: number;

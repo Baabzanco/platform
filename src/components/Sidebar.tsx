@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Truck,
   UserCircle2,
+  Users,
   X,
 } from 'lucide-react';
 import { Department, WorkflowDepartment } from '../types/order';
@@ -69,6 +70,12 @@ const NAV_ITEMS: Array<{
     shortLabel: 'دسترسی‌ها',
     icon: ShieldCheck,
   },
+  {
+    id: 'customers',
+    label: 'لیست طرف حساب‌ها (مشتریان)',
+    shortLabel: 'طرف حساب‌ها',
+    icon: Users,
+  },
 ];
 
 const MOBILE_PRIMARY_TABS: Department[] = [
@@ -93,7 +100,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return 0;
   };
 
-  const isMoreActive = activePage === 'reports' || activePage === 'access';
+  const isMoreActive =
+    activePage === 'reports' ||
+    activePage === 'access' ||
+    activePage === 'customers';
 
   return (
     <>
@@ -117,29 +127,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
             const badgeCount = getBadgeCount(item);
 
             return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSelectPage(item.id)}
-                title={item.label}
-                aria-label={item.label}
-                aria-current={isActive ? 'page' : undefined}
-                className={`group relative w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] focus-visible:ring-offset-2 ${
-                  isActive
-                    ? 'bg-[#0f5864] text-white shadow-sm'
-                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                {badgeCount > 0 && (
-                  <span className="tabular-nums absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white">
-                    {badgeCount}
-                  </span>
+              <React.Fragment key={item.id}>
+                {item.id === 'customers' && (
+                  <div
+                    className="w-8 h-px bg-slate-200 my-0.5"
+                    aria-hidden="true"
+                  />
                 )}
-                <span className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute right-[calc(100%+10px)] whitespace-nowrap bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-md shadow-md z-50">
-                  {item.label}
-                </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectPage(item.id)}
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`group relative w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] focus-visible:ring-offset-2 ${
+                    isActive
+                      ? 'bg-[#0f5864] text-white shadow-sm'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  {badgeCount > 0 && (
+                    <span className="tabular-nums absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center border-2 border-white">
+                      {badgeCount}
+                    </span>
+                  )}
+                  <span className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute right-[calc(100%+10px)] whitespace-nowrap bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-md shadow-md z-50">
+                    {item.label}
+                  </span>
+                </button>
+              </React.Fragment>
             );
           })}
         </nav>
@@ -299,6 +316,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <ShieldCheck className="w-5 h-5 shrink-0" />
                 <span>سطح دسترسی و گروه‌های کاربری</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onSelectPage('customers');
+                }}
+                className={`w-full min-h-[48px] px-4 rounded-xl flex items-center gap-3 text-sm font-semibold transition-colors ${
+                  activePage === 'customers'
+                    ? 'bg-[#0f5864]/10 text-[#0f5864]'
+                    : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <Users className="w-5 h-5 shrink-0" />
+                <span>لیست طرف حساب‌ها (مشتریان)</span>
               </button>
 
               <div className="my-2 border-t border-slate-100" />

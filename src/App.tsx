@@ -23,12 +23,15 @@ import {
   WeightModal,
 } from './components/modals/OrderModals';
 import { AccessControlPage } from './components/pages/AccessControlPage';
+import { CustomerProfilePage } from './components/pages/CustomerProfilePage';
+import { CustomersListPage } from './components/pages/CustomersListPage';
 import { DriverPage } from './components/pages/DriverPage';
 import { FinancePage } from './components/pages/FinancePage';
 import { ProductionPage } from './components/pages/ProductionPage';
 import { ReportsPage } from './components/pages/ReportsPage';
 import { ShippingPage } from './components/pages/ShippingPage';
 import { useAccessControl } from './hooks/useAccessControl';
+import { useCustomerStore } from './hooks/useCustomerStore';
 import { useOrderStore } from './hooks/useOrderStore';
 import { Department, Order, OrderItem, WorkflowDepartment } from './types/order';
 import { AccessControlHelpers } from './types/permissions';
@@ -85,7 +88,27 @@ export default function App() {
     resetAccessControl,
   } = useAccessControl();
 
+  const {
+    customers,
+    createCustomer,
+    updateCustomerBasic,
+    toggleCustomerActive,
+    assignRepsBulk,
+    sendSmsBulk,
+    addContact,
+    updateContact,
+    deleteContact,
+    addChatMessage,
+    referToCrm,
+    addEvent,
+    addCallLog,
+    resetCustomers,
+  } = useCustomerStore();
+
   const [activePage, setActivePage] = useState<Department>('production');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    null
+  );
   const [weekOffset, setWeekOffset] = useState<number>(0);
   const [selectedDateKey, setSelectedDateKey] = useState<string>(
     DEFAULT_SELECTED_DATE_KEY
@@ -188,8 +211,14 @@ export default function App() {
     locationModal !== null ||
     resetOpen;
 
+  const selectedCustomer =
+    selectedCustomerId !== null
+      ? customers.find((c) => c.id === selectedCustomerId) ?? null
+      : null;
+
   const handleSelectPage = (page: Department) => {
     setSelectedOrderId(null);
+    setSelectedCustomerId(null);
     setActivePage(page);
     if (page === 'production' || page === 'finance' || page === 'shipping') {
       flushDeptNotifications(page);
@@ -262,7 +291,7 @@ export default function App() {
       <main className="print-container flex-1 overflow-y-auto px-3 py-3.5 pb-24 md:p-5 lg:p-6 md:pb-6">
         <div className="max-w-[1380px] mx-auto w-full flex flex-col gap-3.5 sm:gap-4">
           {/* Top Weekly Daily Calendar Bar */}
-          {activePage !== 'access' && (
+          {activePage !== 'access' && activePage !== 'customers' && (
             <DailyCalendarBar
               days={weekDays}
               selectedDateKey={selectedDateKey}
@@ -280,6 +309,7 @@ export default function App() {
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+              onOpenWeight={(order, item) => setWeightTarget({ order, item })}
             />
           )}
 
@@ -402,6 +432,36 @@ export default function App() {
               }}
             />
           )}
+
+          {activePage === 'customers' &&
+            (selectedCustomer ? (
+              <CustomerProfilePage
+                customer={selectedCustomer}
+                allCustomers={customers}
+                onBackToList={() => setSelectedCustomerId(null)}
+                onSwitchCustomer={(id) => setSelectedCustomerId(id)}
+                onUpdateCustomer={updateCustomerBasic}
+                onToggleActive={toggleCustomerActive}
+                onAddContact={addContact}
+                onUpdateContact={updateContact}
+                onDeleteContact={deleteContact}
+                onAddChatMessage={addChatMessage}
+                onReferToCrm={referToCrm}
+                onAddEvent={addEvent}
+                onAddCallLog={addCallLog}
+                onSendSms={sendSmsBulk}
+                onNotify={pushToast}
+              />
+            ) : (
+              <CustomersListPage
+                customers={customers}
+                onSelectCustomer={(id) => setSelectedCustomerId(id)}
+                onCreateCustomer={createCustomer}
+                onAssignRepsBulk={assignRepsBulk}
+                onSendSmsBulk={sendSmsBulk}
+                onNotify={pushToast}
+              />
+            ))}
         </div>
       </main>
 
@@ -540,10 +600,12 @@ export default function App() {
         onClose={() => setResetOpen(false)}
         onConfirm={() => {
           setSelectedOrderId(null);
+          setSelectedCustomerId(null);
           setWeekOffset(0);
           setSelectedDateKey(DEFAULT_SELECTED_DATE_KEY);
           resetDemoData();
           resetAccessControl();
+          resetCustomers();
         }}
       />
     </div>

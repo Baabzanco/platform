@@ -951,7 +951,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   className="min-h-[48px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold bg-emerald-600 text-white rounded-xl sm:rounded-md hover:bg-emerald-700 transition-colors whitespace-nowrap"
                 >
                   <CheckCheck className="w-4 h-4" />
-                  اتمام تولید و ارسال به صدور فاکتور
+                  تایید نهایی و ارسال به صدور فاکتور
                 </button>
               )}
 

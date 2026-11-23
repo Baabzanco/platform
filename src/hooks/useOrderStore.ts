@@ -179,7 +179,9 @@ export function useOrderStore() {
   // 1. Production: record exact produced weight for an item
   const recordItemWeight = useCallback(
     (orderId: string, itemId: string, weight: number) => {
+      const target = orders.find((o) => o.id === orderId);
       const now = Date.now();
+
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
@@ -192,8 +194,26 @@ export function useOrderStore() {
           };
         })
       );
+
+      if (target && target.status === 'in_production') {
+        const wasAlreadyComplete = target.items.every(
+          (item) => item.producedWeight !== null
+        );
+        const nowComplete = target.items.every((item) =>
+          item.id === itemId ? true : item.producedWeight !== null
+        );
+
+        if (nowComplete && !wasAlreadyComplete) {
+          pushToast(
+            `تکمیل اقلام سفارش ${target.code}`,
+            `وزن تمامی اقلام سفارش ${target.code} ثبت شد و به رنگ سبز در لیست سفارشات تولید آماده تایید نهایی و ارسال به صدور فاکتور است.`,
+            'آماده تایید نهایی تولید',
+            'success'
+          );
+        }
+      }
     },
-    []
+    [orders, pushToast]
   );
 
   // 3. Production: complete production and unlock Invoice Issuance

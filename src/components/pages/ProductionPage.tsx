@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
   Boxes,
+  Check,
+  CheckCircle2,
   ChevronLeft,
   ClipboardList,
   Clock,
@@ -9,7 +11,7 @@ import {
   RotateCcw,
   Search,
 } from 'lucide-react';
-import { Order } from '../../types/order';
+import { Order, OrderItem } from '../../types/order';
 import { AccessControlHelpers } from '../../types/permissions';
 import {
   buildPreparationSummary,
@@ -22,6 +24,7 @@ interface ProductionPageProps {
   access: AccessControlHelpers;
   onPrintAll: () => void;
   onSelectOrder: (orderId: string) => void;
+  onOpenWeight: (order: Order, item: OrderItem) => void;
 }
 
 type ProdTab = 'orders' | 'prep';
@@ -41,6 +44,14 @@ function isCompletedInProd(order: Order): boolean {
   );
 }
 
+function isReadyForFinalApprovalInProd(order: Order): boolean {
+  return (
+    order.status === 'in_production' &&
+    order.items.length > 0 &&
+    order.items.every((item) => item.producedWeight !== null)
+  );
+}
+
 function isPendingReturnConfirmInProd(order: Order): boolean {
   return (
     order.status === 'returned' &&
@@ -49,15 +60,16 @@ function isPendingReturnConfirmInProd(order: Order): boolean {
 }
 
 function isProdPriority(order: Order): boolean {
-  return isPendingReturnConfirmInProd(order);
+  return isPendingReturnConfirmInProd(order) || isReadyForFinalApprovalInProd(order);
 }
 
 function getProductionSortRank(order: Order): number {
   if (isPendingReturnConfirmInProd(order)) return 0;
-  if (order.status === 'in_production') return 1;
-  if (isCompletedInProd(order)) return 2;
-  if (order.status === 'returned') return 3;
-  return 4;
+  if (isReadyForFinalApprovalInProd(order)) return 1;
+  if (order.status === 'in_production') return 2;
+  if (isCompletedInProd(order)) return 3;
+  if (order.status === 'returned') return 4;
+  return 5;
 }
 
 export const ProductionPage: React.FC<ProductionPageProps> = ({
@@ -65,6 +77,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
   printingOrderId,
   onPrintAll,
   onSelectOrder,
+  onOpenWeight,
 }) => {
   const [activeTab, setActiveTab] = useState<ProdTab>('orders');
   const [searchQuery, setSearchQuery] = useState('');
@@ -105,7 +118,20 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
     [sortedAndFilteredOrders]
   );
 
+  const readyForFinalApprovalCount = useMemo(
+    () => orders.filter(isReadyForFinalApprovalInProd).length,
+    [orders]
+  );
+
   const prepSummary = useMemo(() => buildPreparationSummary(orders), [orders]);
+
+  const handleOpenPrepWeight = (orderId: string, itemId: string) => {
+    const targetOrder = orders.find((o) => o.id === orderId);
+    const targetItem = targetOrder?.items.find((i) => i.id === itemId);
+    if (targetOrder && targetItem) {
+      onOpenWeight(targetOrder, targetItem);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3.5 sm:gap-4 w-full">
@@ -148,6 +174,11 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
             <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
               ({orders.length})
             </span>
+            {readyForFinalApprovalCount > 0 && (
+              <span className="tabular-nums px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
+                {readyForFinalApprovalCount} آماده تایید
+              </span>
+            )}
             {activeTab === 'orders' && (
               <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
             )}
@@ -243,6 +274,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
           ) : (
             sortedAndFilteredOrders.map((order, index) => {
               const completed = isCompletedInProd(order);
+              const readyForFinalApproval = isReadyForFinalApprovalInProd(order);
               const rejected = order.status === 'rejected';
               const returned = order.status === 'returned';
               const pendingReturnConfirm = isPendingReturnConfirmInProd(order);
@@ -252,11 +284,13 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
 
               const cardStyle = pendingReturnConfirm
                 ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
-                : rejected || returned
-                  ? 'border border-red-300 bg-red-50/20'
-                  : completed
-                    ? 'border border-emerald-400 bg-emerald-50/25'
-                    : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
+                : readyForFinalApproval
+                  ? 'border-2 border-emerald-500 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/20 hover:bg-emerald-100/75'
+                  : rejected || returned
+                    ? 'border border-red-300 bg-red-50/20'
+                    : completed
+                      ? 'border border-slate-300 bg-slate-50/70'
+                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
               return (
                 <React.Fragment key={order.id}>
@@ -289,18 +323,36 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                         </div>
                       )}
 
+                      {readyForFinalApproval && (
+                        <div className="no-print px-4 sm:px-5 py-2 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                          <span className="inline-flex items-center gap-1.5">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            تمامی اقلام تکمیل شد — آماده تایید نهایی و ارسال به صدور فاکتور
+                          </span>
+                          <span className="opacity-95 text-[11px]">باز کردن و تایید نهایی</span>
+                        </div>
+                      )}
+
                       {/* Responsive Card Body (Only Order Code & Delivery Slot) */}
                       <div className="p-4 sm:px-5 sm:py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="grid grid-cols-2 sm:flex sm:items-center gap-x-6 sm:gap-x-10 gap-y-2.5 flex-1 items-center text-[13px]">
                           <div>
-                            <span className="block text-[11px] text-slate-500 mb-0.5">
+                            <span
+                              className={`block text-[11px] mb-0.5 ${
+                                readyForFinalApproval
+                                  ? 'text-emerald-800/80'
+                                  : 'text-slate-500'
+                              }`}
+                            >
                               کد سفارش
                             </span>
                             <span
                               className={`tabular-nums text-base font-bold ${
                                 rejected || returned
                                   ? 'text-red-700'
-                                  : 'text-[#0056b3]'
+                                  : readyForFinalApproval
+                                    ? 'text-emerald-900'
+                                    : 'text-[#0056b3]'
                               }`}
                             >
                               {order.code}
@@ -308,18 +360,46 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                           </div>
 
                           <div>
-                            <span className="block text-[11px] text-slate-500 mb-0.5">
+                            <span
+                              className={`block text-[11px] mb-0.5 ${
+                                readyForFinalApproval
+                                  ? 'text-emerald-800/80'
+                                  : 'text-slate-500'
+                              }`}
+                            >
                               بازه ارسال
                             </span>
-                            <span className="font-semibold text-slate-800 inline-flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span
+                              className={`font-semibold inline-flex items-center gap-1 ${
+                                readyForFinalApproval
+                                  ? 'text-emerald-950'
+                                  : 'text-slate-800'
+                              }`}
+                            >
+                              <Clock
+                                className={`w-3.5 h-3.5 shrink-0 ${
+                                  readyForFinalApproval
+                                    ? 'text-emerald-700'
+                                    : 'text-slate-400'
+                                }`}
+                              />
                               {order.deliverySlot}
                             </span>
                           </div>
                         </div>
 
-                        <div className="no-print pt-2.5 sm:pt-0 border-t sm:border-t-0 border-slate-100 flex items-center justify-between sm:justify-end gap-1.5 text-xs font-bold text-[#0f5864] shrink-0">
-                          <span>مشاهده و ثبت وزن</span>
+                        <div
+                          className={`no-print pt-2.5 sm:pt-0 border-t sm:border-t-0 flex items-center justify-between sm:justify-end gap-1.5 text-xs font-bold shrink-0 ${
+                            readyForFinalApproval
+                              ? 'border-emerald-200 text-emerald-800'
+                              : 'border-slate-100 text-[#0f5864]'
+                          }`}
+                        >
+                          <span>
+                            {readyForFinalApproval
+                              ? 'تایید نهایی و ارسال به فاکتور'
+                              : 'مشاهده و ثبت وزن'}
+                          </span>
                           <ChevronLeft className="w-4 h-4" />
                         </div>
                       </div>
@@ -390,7 +470,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                     </th>
                     {Array.from({ length: prepSummary.maxColumns }).map((_, colIdx) => (
                       <React.Fragment key={colIdx}>
-                        <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[76px] sm:min-w-[88px]">
+                        <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[138px] sm:min-w-[152px]">
                           وزن {colIdx + 1}
                         </th>
                         <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[84px] sm:min-w-[96px]">
@@ -423,20 +503,60 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                             </React.Fragment>
                           );
                         }
+                        const isWeighed = alloc.producedWeight !== null;
                         return (
-                          <React.Fragment key={alloc.orderId}>
-                            <td className="tabular-nums px-3 sm:px-4 py-3 border-l border-slate-100 font-semibold text-slate-800 whitespace-nowrap">
-                              {alloc.requestedWeight} kg
-                              {alloc.producedWeight !== null && (
-                                <span className="block text-[10px] font-normal text-emerald-700">
-                                  توزین: {alloc.producedWeight}
-                                </span>
-                              )}
+                          <React.Fragment key={`${alloc.orderId}-${alloc.itemId}`}>
+                            <td
+                              className={`tabular-nums px-2.5 sm:px-3.5 py-2.5 border-l border-slate-100 whitespace-nowrap ${
+                                isWeighed ? 'bg-emerald-50/70' : ''
+                              }`}
+                            >
+                              <div className="inline-flex items-center justify-center gap-2">
+                                <div className="text-right">
+                                  <span className="font-bold text-slate-800 block leading-tight">
+                                    {alloc.requestedWeight} kg
+                                  </span>
+                                  {isWeighed && (
+                                    <span className="block text-[10px] font-bold text-emerald-700 leading-tight mt-0.5">
+                                      ثبت: {alloc.producedWeight} kg
+                                    </span>
+                                  )}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenPrepWeight(alloc.orderId, alloc.itemId)
+                                  }
+                                  className={`no-print min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                                    isWeighed
+                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                      : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                  }`}
+                                >
+                                  {isWeighed ? (
+                                    <>
+                                      <Check className="w-3 h-3 shrink-0" />
+                                      ثبت شد
+                                    </>
+                                  ) : (
+                                    'ثبت'
+                                  )}
+                                </button>
+                              </div>
                             </td>
-                            <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-600 whitespace-nowrap">
+                            <td
+                              className={`px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-600 whitespace-nowrap ${
+                                isWeighed ? 'bg-emerald-50/40' : ''
+                              }`}
+                            >
                               {alloc.deliverySlot}
                             </td>
-                            <td className="tabular-nums px-3 sm:px-4 py-3 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap">
+                            <td
+                              className={`tabular-nums px-3 sm:px-4 py-3 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap ${
+                                isWeighed ? 'bg-emerald-50/40' : ''
+                              }`}
+                            >
                               <button
                                 type="button"
                                 onClick={() => onSelectOrder(alloc.orderId)}
