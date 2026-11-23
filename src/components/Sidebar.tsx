@@ -243,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             if (e.target === e.currentTarget) setMoreOpen(false);
           }}
         >
-          <div className="bg-white w-full rounded-t-2xl border-t border-slate-200 shadow-2xl pb-safe overflow-hidden">
+          <div className="bg-white w-full rounded-t-2xl border-t border-slate-200 shadow-2xl pb-modal-safe overflow-hidden">
             <div className="pt-2.5 pb-1 flex justify-center">
               <span className="w-10 h-1.5 rounded-full bg-slate-300" />
             </div>

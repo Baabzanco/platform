@@ -27,7 +27,7 @@ export const ReturnResolutionBox: React.FC<ReturnResolutionBoxProps> = ({
   ).length;
 
   return (
-    <div className="px-5 py-4 bg-red-50/90 border-t border-red-200 text-red-950 text-[13px] space-y-3">
+    <div className="px-4 sm:px-5 pt-4 pb-6 bg-red-50/90 border-t border-red-200 text-red-950 text-[13px] space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1.5">
           <div className="font-bold flex items-center gap-2 text-red-800">

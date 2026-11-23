@@ -923,7 +923,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
         {/* Sticky Modal Action Footer (Thumb-Friendly Full-Width CTAs on Mobile) */}
         {department === 'production' && !returned && (
-          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-safe shrink-0">
+          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
             <span className="text-xs text-slate-600 leading-snug">
               {inProduction && !allItemsWeighed
                 ? `لطفاً وزن تمام اقلام را ثبت کنید (${weighedCount} از ${order.items.length}).`
@@ -973,7 +973,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
         )}
 
         {department === 'finance' && !returned && (
-          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-safe shrink-0">
+          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
             <div className="text-xs text-slate-600">
               جمع قابل پرداخت:{' '}
               <strong className="tabular-nums text-sm text-slate-900">
@@ -1035,7 +1035,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
         {department === 'shipping' && (
           <>
             {rejected && (
-              <div className="px-4 sm:px-5 py-3.5 bg-red-50 text-red-800 border-t border-red-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-safe shrink-0">
+              <div className="px-4 sm:px-5 py-3.5 bg-red-50 text-red-800 border-t border-red-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-modal-safe shrink-0">
                 <Ban className="w-4 h-4 shrink-0" />
                 <span>
                   این سفارش توسط{' '}
@@ -1046,7 +1046,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
 
             {discrepancy && (
-              <div className="px-4 sm:px-5 py-3.5 bg-amber-50 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-safe shrink-0">
+              <div className="px-4 sm:px-5 py-3.5 bg-amber-50 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-modal-safe shrink-0">
                 <Clock className="w-4 h-4 shrink-0" />
                 <span>
                   مغایرت وزن ثبت شد و سفارش جهت تایید مجدد به واحد صدور فاکتور ارجاع گردید.
@@ -1056,7 +1056,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
             {(order.status === 'in_production' ||
               order.status === 'pending_finance_approval') && (
-              <div className="px-4 sm:px-5 py-3.5 bg-amber-50/90 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-semibold flex items-center gap-2 pb-safe shrink-0">
+              <div className="px-4 sm:px-5 py-3.5 bg-amber-50/90 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-semibold flex items-center gap-2 pb-modal-safe shrink-0">
                 <Lock className="w-4 h-4 shrink-0" />
                 <span>
                   این سفارش در انتظار تایید نهایی توسط واحد صدور فاکتور است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.
@@ -1065,7 +1065,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
 
             {readyToShip && (
-              <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-safe shrink-0">
+              <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-modal-safe shrink-0">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 flex-1">
                   <label
                     htmlFor={`modal-driver-${order.id}`}
@@ -1111,7 +1111,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
 
             {(delivered || returned) && (
-              <div className="px-4 sm:px-5 py-3.5 bg-emerald-50 border-t border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-safe shrink-0">
+              <div className="px-4 sm:px-5 py-3.5 bg-emerald-50 border-t border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-modal-safe shrink-0">
                 <span className="inline-flex items-center gap-2 text-emerald-800 font-bold text-xs sm:text-[13px]">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
                   با موفقیت تحویل داده شد

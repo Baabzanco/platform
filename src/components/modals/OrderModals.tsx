@@ -84,7 +84,7 @@ const ModalShell: React.FC<BaseModalProps> = ({
 
         <div className="p-4 sm:p-5 overflow-y-auto flex-1">{children}</div>
 
-        <div className="px-4 sm:px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pb-safe shrink-0">
+        <div className="px-4 sm:px-5 pt-3.5 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pb-modal-safe shrink-0">
           {footer}
         </div>
       </div>

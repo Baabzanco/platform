@@ -627,7 +627,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
           </div>
 
           {/* Sticky Action Footer (Full-Width Thumb CTA on Mobile) */}
-          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-safe shrink-0">
+          <div className="px-4 sm:px-5 pt-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
             {completed ? (
               <>
                 <span className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800">
