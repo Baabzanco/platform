@@ -8,6 +8,10 @@ import { DailyCalendarBar, DayBadgeMetrics } from './components/DailyCalendarBar
 import { Sidebar } from './components/Sidebar';
 import { ToastContainer } from './components/ToastContainer';
 import { DriverOrderModal } from './components/modals/DriverOrderModal';
+import {
+  LocationMapModal,
+  LocationModalMode,
+} from './components/modals/LocationMapModal';
 import { OrderDetailModal } from './components/modals/OrderDetailModal';
 import {
   DeliveryModal,
@@ -57,7 +61,7 @@ export default function App() {
     submitReturn,
     confirmReturnByDepartment,
     rejectOrder,
-    reorderDriverOrders,
+    saveCustomerLocation,
     uploadDriverDocument,
     removeDriverDocument,
     completeDriverDelivery,
@@ -103,6 +107,10 @@ export default function App() {
   const [discrepancyOrder, setDiscrepancyOrder] = useState<Order | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<Order | null>(null);
   const [returnOrder, setReturnOrder] = useState<Order | null>(null);
+  const [locationModal, setLocationModal] = useState<{
+    orderId: string;
+    mode: LocationModalMode;
+  } | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
 
   const weekDays = useMemo(() => getWeekDays(weekOffset), [weekOffset]);
@@ -161,26 +169,10 @@ export default function App() {
       ? orders.find((o) => o.id === selectedOrderId) ?? null
       : null;
 
-  const selectedDriverStopNumber = useMemo(() => {
-    if (!selectedOrder || activePage !== 'driver') return 1;
-    const sorted = dayOrders
-      .filter((o) => o.status !== 'rejected')
-      .slice()
-      .sort((a, b) => {
-        const aRej =
-          a.driverDelivery?.financeRejected && !a.driverDelivery?.sentToFinance
-            ? 0
-            : 1;
-        const bRej =
-          b.driverDelivery?.financeRejected && !b.driverDelivery?.sentToFinance
-            ? 0
-            : 1;
-        if (aRej !== bRej) return aRej - bRej;
-        return a.routeOrder - b.routeOrder;
-      });
-    const idx = sorted.findIndex((o) => o.id === selectedOrder.id);
-    return idx >= 0 ? idx + 1 : 1;
-  }, [selectedOrder, activePage, dayOrders]);
+  const locationTargetOrder =
+    locationModal !== null
+      ? orders.find((o) => o.id === locationModal.orderId) ?? null
+      : null;
 
   const hasSubModalOpen =
     weightTarget !== null ||
@@ -189,6 +181,7 @@ export default function App() {
     discrepancyOrder !== null ||
     deliveryOrder !== null ||
     returnOrder !== null ||
+    locationModal !== null ||
     resetOpen;
 
   const handleSelectPage = (page: Department) => {
@@ -313,16 +306,10 @@ export default function App() {
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
-              onReorderOrders={reorderDriverOrders}
-              onCallCustomer={handleCallCustomer}
-              onSortByDistrictToast={() =>
-                pushToast(
-                  'اولویت‌بندی بر اساس محدوده انجام شد',
-                  'سفارش‌های مسیر روز بر اساس محدوده جغرافیایی مرتب شدند.',
-                  'پنل رانندگان',
-                  'info'
-                )
+              onOpenLocationModal={(order, mode) =>
+                setLocationModal({ orderId: order.id, mode })
               }
+              onCallCustomer={handleCallCustomer}
             />
           )}
 
@@ -446,15 +433,30 @@ export default function App() {
       {activePage === 'driver' && (
         <DriverOrderModal
           order={selectedOrder}
-          stopNumber={selectedDriverStopNumber}
           access={FULL_ACCESS}
+          disableEscape={locationModal !== null}
           onClose={() => setSelectedOrderId(null)}
           onCallCustomer={handleCallCustomer}
+          onOpenLocationModal={(order, mode) =>
+            setLocationModal({ orderId: order.id, mode })
+          }
           onUploadDocument={uploadDriverDocument}
           onRemoveDocument={removeDriverDocument}
           onCompleteDelivery={completeDriverDelivery}
         />
       )}
+
+      {/* Interactive Map Modal (Register Customer Location / Driver Navigation) */}
+      <LocationMapModal
+        open={locationModal !== null && locationTargetOrder !== null}
+        order={locationTargetOrder}
+        mode={locationModal?.mode ?? 'pick'}
+        onChangeMode={(nextMode) =>
+          setLocationModal((prev) => (prev ? { ...prev, mode: nextMode } : null))
+        }
+        onClose={() => setLocationModal(null)}
+        onSaveLocation={saveCustomerLocation}
+      />
 
       {/* Action Sub-Modals */}
       <WeightModal

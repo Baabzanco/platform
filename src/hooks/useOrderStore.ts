@@ -18,6 +18,13 @@ interface PersistedState {
   unreadByDept: Record<WorkflowDepartment, UnreadNotification[]>;
 }
 
+const INITIAL_LOCATION_BY_ID = new Map(
+  INITIAL_ORDERS.filter((o) => o.customerLocation).map((o) => [
+    o.id,
+    o.customerLocation!,
+  ])
+);
+
 function normalizeOrders(orders: Order[]): Order[] {
   return orders.map((order, idx) => {
     const normalized: Order = {
@@ -28,6 +35,8 @@ function normalizeOrders(orders: Order[]): Order[] {
           : order.status,
       district: order.district || 'محدوده تهران',
       routeOrder: typeof order.routeOrder === 'number' ? order.routeOrder : idx + 1,
+      customerLocation:
+        order.customerLocation ?? INITIAL_LOCATION_BY_ID.get(order.id),
       deliveryDate: order.deliveryDate || DEFAULT_SELECTED_DATE_KEY,
       seenByDept: order.seenByDept ?? {
         production: true,
@@ -511,23 +520,42 @@ export function useOrderStore() {
     [orders, pushToast, queueDeptNotification]
   );
 
-  // 11. Driver: reorder route priority for a list of order IDs
-  const reorderDriverOrders = useCallback((orderedIds: string[]) => {
-    const rankMap = new Map<string, number>();
-    orderedIds.forEach((id, index) => {
-      rankMap.set(id, index + 1);
-    });
+  // 11. Driver: register or update customer map location
+  const saveCustomerLocation = useCallback(
+    (orderId: string, location: { lat: number; lng: number; note?: string }) => {
+      const target = orders.find((o) => o.id === orderId);
+      const stamp = formatTimeStamp();
+      const hadPrevious = Boolean(target?.customerLocation);
 
-    setOrders((prev) =>
-      prev.map((order) => {
-        const nextRank = rankMap.get(order.id);
-        if (nextRank === undefined || order.routeOrder === nextRank) {
-          return order;
-        }
-        return { ...order, routeOrder: nextRank };
-      })
-    );
-  }, []);
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === orderId
+            ? {
+                ...order,
+                customerLocation: {
+                  lat: Number(location.lat.toFixed(6)),
+                  lng: Number(location.lng.toFixed(6)),
+                  savedAt: stamp,
+                  note: location.note?.trim() || undefined,
+                },
+              }
+            : order
+        )
+      );
+
+      if (target) {
+        pushToast(
+          hadPrevious
+            ? `لوکیشن مشتری ویرایش شد — سفارش ${target.code}`
+            : `لوکیشن مشتری ثبت شد — سفارش ${target.code}`,
+          `موقعیت مکانی مشتری در محدوده ${target.district} ذخیره شد و دکمه مسیریابی فعال گردید.`,
+          'پنل رانندگان',
+          'success'
+        );
+      }
+    },
+    [orders, pushToast]
+  );
 
   // 12. Driver: upload invoice or payment receipt photo
   const uploadDriverDocument = useCallback(
@@ -756,7 +784,7 @@ export function useOrderStore() {
     submitReturn,
     confirmReturnByDepartment,
     rejectOrder,
-    reorderDriverOrders,
+    saveCustomerLocation,
     uploadDriverDocument,
     removeDriverDocument,
     completeDriverDelivery,

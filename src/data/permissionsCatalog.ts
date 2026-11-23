@@ -250,12 +250,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     id: 'driver_and_general',
     title: 'عملیات پنل رانندگان و امکانات عمومی',
-    description: 'اولویت‌بندی مسیر، آپلود عکس مدارک تحویل، پرینت و بازنشانی',
+    description: 'ثبت لوکیشن مشتری، مسیریابی، آپلود عکس مدارک تحویل، پرینت و بازنشانی',
     items: [
       {
         key: 'action_driver_route_priority',
-        label: 'اولویت‌بندی مسیر رانندگان',
-        description: 'نمایش شماره مسیر و امکان تغییر ترتیب (کشیدن، بالا/پایین، مرتب‌سازی)',
+        label: 'ثبت لوکیشن مشتری و مسیریابی',
+        description: 'مشاهده نقشه، ثبت موقعیت مکانی مشتری و شروع مسیریابی به سمت مقصد',
       },
       {
         key: 'field_driver_invoice_photo',

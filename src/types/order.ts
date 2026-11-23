@@ -83,6 +83,13 @@ export interface DriverDeliveryRecord {
   };
 }
 
+export interface CustomerLocation {
+  lat: number;
+  lng: number;
+  savedAt: string;
+  note?: string;
+}
+
 export interface Order {
   id: string;
   code: string;
@@ -97,6 +104,7 @@ export interface Order {
   items: OrderItem[];
   driverName: string;
   routeOrder: number;
+  customerLocation?: CustomerLocation;
   driverDelivery?: DriverDeliveryRecord;
   rejection?: RejectionRecord;
   discrepancy?: DiscrepancyRecord;

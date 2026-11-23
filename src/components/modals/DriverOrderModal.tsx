@@ -5,9 +5,12 @@ import {
   CheckCheck,
   CheckCircle2,
   Clock,
+  Edit3,
   Eye,
   FileText,
   MapPin,
+  MapPinPlus,
+  Navigation,
   Package,
   Phone,
   Receipt,
@@ -20,13 +23,15 @@ import { AccessControlHelpers } from '../../types/permissions';
 import { formatWeight, getShippingWeight } from '../../utils/formatters';
 import { processDocumentImageFile } from '../../utils/imageUpload';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
+import { LocationModalMode } from './LocationMapModal';
 
 interface DriverOrderModalProps {
   order: Order | null;
-  stopNumber: number;
   access: AccessControlHelpers;
+  disableEscape?: boolean;
   onClose: () => void;
   onCallCustomer: (order: Order) => void;
+  onOpenLocationModal: (order: Order, mode: LocationModalMode) => void;
   onUploadDocument: (
     orderId: string,
     docType: 'invoice' | 'paymentReceipt',
@@ -41,9 +46,10 @@ interface DriverOrderModalProps {
 
 export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   order,
-  stopNumber,
+  disableEscape = false,
   onClose,
   onCallCustomer,
+  onOpenLocationModal,
   onUploadDocument,
   onRemoveDocument,
   onCompleteDelivery,
@@ -61,7 +67,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   } | null>(null);
 
   useEffect(() => {
-    if (!order) return;
+    if (!order || disableEscape) return;
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         if (previewPhoto) {
@@ -73,7 +79,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [order, previewPhoto, onClose]);
+  }, [order, disableEscape, previewPhoto, onClose]);
 
   useEffect(() => {
     setUploadError('');
@@ -185,16 +191,11 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-x-6 gap-y-2 flex-1 min-w-0">
               <div className="text-[13px]">
                 <span className="block text-[11px] text-slate-500 mb-0.5">
-                  اولویت مسیر
+                  بازه تحویل
                 </span>
-                <span
-                  className={`tabular-nums text-sm font-bold ${
-                    financeRejected ? 'text-red-700' : 'text-[#0f5864]'
-                  }`}
-                >
-                  {financeRejected
-                    ? 'اولویت فوری (عکس مجدد)'
-                    : `مسیر ${toPersianDigits(stopNumber)}`}
+                <span className="font-bold text-[#0f5864] inline-flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5" />
+                  {order.deliverySlot}
                 </span>
               </div>
 
@@ -222,11 +223,14 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
               <div className="text-[13px]">
                 <span className="block text-[11px] text-slate-500 mb-0.5">
-                  بازه تحویل
+                  لوکیشن مشتری
                 </span>
-                <span className="font-semibold text-slate-800 inline-flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                  {order.deliverySlot}
+                <span
+                  className={`font-bold text-xs ${
+                    order.customerLocation ? 'text-emerald-700' : 'text-amber-700'
+                  }`}
+                >
+                  {order.customerLocation ? 'ثبت شده' : 'ثبت نشده'}
                 </span>
               </div>
             </div>
@@ -273,15 +277,69 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
             {/* Address & Direct Customer Call */}
             <div className="px-4 sm:px-5 py-4 bg-white space-y-3">
-              <div className="flex items-start gap-2.5 bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 text-xs sm:text-[13px] text-slate-800">
-                <MapPin className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="block text-[11px] text-slate-500 mb-0.5">
-                    آدرس دقیق تحویل ({order.district})
-                  </span>
-                  <span className="font-semibold leading-relaxed">
-                    {order.address}
-                  </span>
+              <div className="bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-3 space-y-2.5 text-xs sm:text-[13px] text-slate-800">
+                <div className="flex items-start gap-2.5">
+                  <MapPin
+                    className={`w-4 h-4 shrink-0 mt-0.5 ${
+                      order.customerLocation ? 'text-emerald-600' : 'text-amber-600'
+                    }`}
+                  />
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <span className="block text-[11px] text-slate-500">
+                      آدرس دقیق تحویل ({order.district})
+                    </span>
+                    <span className="font-semibold leading-relaxed block">
+                      {order.address}
+                    </span>
+                    {order.customerLocation?.note && (
+                      <span className="block text-xs text-[#0f5864] font-medium pt-0.5">
+                        توضیح لوکیشن: {order.customerLocation.note}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Location / Navigation Controls */}
+                <div className="pt-2 border-t border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  {order.customerLocation ? (
+                    <>
+                      <span className="text-[11px] text-emerald-800 font-medium tabular-nums">
+                        لوکیشن ثبت‌شده ({order.customerLocation.savedAt})
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onOpenLocationModal(order, 'pick')}
+                          className="min-h-[42px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          ویرایش
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpenLocationModal(order, 'navigate')}
+                          className="flex-1 sm:flex-none min-h-[42px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99] transition-all whitespace-nowrap"
+                        >
+                          <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                          مسیریابی به سمت مشتری
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-[11px] text-amber-800 font-medium">
+                        هنوز موقعیت مکانی روی نقشه برای این مشتری ثبت نشده است.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onOpenLocationModal(order, 'pick')}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-amber-500 text-white hover:bg-amber-600 active:scale-[0.99] transition-all whitespace-nowrap"
+                      >
+                        <MapPinPlus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                        ثبت لوکیشن روی نقشه
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
