@@ -65,11 +65,11 @@ export const DriverPage: React.FC<DriverPageProps> = ({
   const [filter, setFilter] = useState<DriverFilter>('all');
   const [driverFilter, setDriverFilter] = useState<string>('all');
 
-  // Deliverable orders sorted strictly by Delivery Time Slot (بازه زمانی ارسال),
-  // while keeping Finance-rejected driver photo orders pinned at top in red priority.
+  // Show ONLY orders approved and handed off by Shipping (واحد ارسال),
+  // sorted by Delivery Time Slot (بازه زمانی ارسال), with Finance-rejected photos pinned at top.
   const slotSortedDayOrders = useMemo(() => {
     return orders
-      .filter((order) => order.status !== 'rejected')
+      .filter((order) => order.status === 'delivered')
       .slice()
       .sort((a, b) => {
         const aRej = isDriverDocsRejected(a) ? 0 : 1;
@@ -161,7 +161,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
         <div className="flex items-start sm:items-center gap-2 text-slate-700">
           <Clock className="w-4 h-4 text-[#0f5864] shrink-0 mt-0.5 sm:mt-0" />
           <span className="leading-relaxed">
-            سفارش‌ها بر اساس <strong className="text-slate-900">بازه زمانی ارسال</strong> مرتب شده‌اند. برای مشتریان دارای لوکیشن می‌توانید مستقیم مسیریابی کنید.
+            فقط سفارش‌های <strong className="text-slate-900">تاییدشده توسط واحد ارسال</strong> نمایش داده می‌شوند و بر اساس <strong className="text-slate-900">بازه زمانی ارسال</strong> مرتب شده‌اند.
           </span>
         </div>
 
@@ -279,7 +279,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
           <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
             <p className="text-sm font-medium text-slate-600 mb-3">
               {slotSortedDayOrders.length === 0
-                ? 'در این تاریخ سفارشی برای تحویل رانندگان وجود ندارد.'
+                ? 'در این تاریخ هنوز سفارشی توسط واحد ارسال تایید و تحویل راننده نشده است.'
                 : 'سفارشی مطابق فیلتر انتخابی یافت نشد.'}
             </p>
             {slotSortedDayOrders.length > 0 && (

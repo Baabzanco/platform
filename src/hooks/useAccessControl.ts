@@ -52,6 +52,8 @@ function loadInitialGroupAccessState(): PersistedGroupAccessState {
         const fallbackGroupId = groups[0].id;
         const users = parsed.users.map((u) => ({
           ...u,
+          fullName:
+            u.fullName === 'امیر مرادصالحی' ? 'امیر مرادصالح' : u.fullName,
           groupId: validGroupIds.has(u.groupId) ? u.groupId : fallbackGroupId,
         }));
         return { groups, users };

@@ -343,7 +343,7 @@ export function useOrderStore() {
 
       pushToast(
         `تحویل موفق — سفارش ${target.code}`,
-        `سفارش ${target.code} با موفقیت تحویل راننده (${target.driverName}) گردید.`,
+        `سفارش ${target.code} توسط واحد ارسال تایید و تحویل راننده (${target.driverName}) گردید و در پنل رانندگان نمایش داده می‌شود.`,
         'ثبت خروج انجام شد',
         'success'
       );

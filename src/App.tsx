@@ -135,17 +135,20 @@ export default function App() {
     const deptForSeen: WorkflowDepartment = activeWorkflowDept ?? 'production';
 
     for (const order of orders) {
+      if (activePage === 'driver' && order.status !== 'delivered') {
+        continue;
+      }
       const key = order.deliveryDate;
       if (!map[key]) {
         map[key] = { totalCount: 0, unseenCount: 0 };
       }
       map[key].totalCount += 1;
-      if (!order.seenByDept[deptForSeen]) {
+      if (activeWorkflowDept && !order.seenByDept[deptForSeen]) {
         map[key].unseenCount += 1;
       }
     }
     return map;
-  }, [orders, activeWorkflowDept]);
+  }, [orders, activePage, activeWorkflowDept]);
 
   // Orders belonging to the selected calendar date
   const dayOrders = useMemo(
@@ -158,6 +161,7 @@ export default function App() {
     () =>
       orders.filter(
         (order) =>
+          order.status === 'delivered' &&
           order.driverDelivery?.financeRejected &&
           !order.driverDelivery?.sentToFinance
       ).length,
@@ -432,7 +436,7 @@ export default function App() {
       {/* Driver Panel Order Action Popup Modal */}
       {activePage === 'driver' && (
         <DriverOrderModal
-          order={selectedOrder}
+          order={selectedOrder?.status === 'delivered' ? selectedOrder : null}
           access={FULL_ACCESS}
           disableEscape={locationModal !== null}
           onClose={() => setSelectedOrderId(null)}

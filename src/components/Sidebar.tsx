@@ -105,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <UserCircle2 className="w-6 h-6" />
           </div>
           <span className="text-[11px] font-semibold text-slate-700 leading-tight">
-            امیر مرادصالحی
+            امیر مرادصالح
           </span>
         </div>
 
@@ -254,7 +254,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <UserCircle2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-slate-900">امیر مرادصالحی</div>
+                  <div className="text-sm font-bold text-slate-900">امیر مرادصالح</div>
                   <div className="text-[11px] text-slate-500">پنل مدیریت سفارشات</div>
                 </div>
               </div>

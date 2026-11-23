@@ -471,7 +471,7 @@ export const INITIAL_USER_GROUPS: UserGroup[] = [
 export const INITIAL_APP_USERS: AppUser[] = [
   {
     id: 'user-admin',
-    fullName: 'امیر مرادصالحی',
+    fullName: 'امیر مرادصالح',
     roleTitle: 'مدیر کل سامانه',
     phone: '0912-100-1001',
     groupId: 'group-admins',
