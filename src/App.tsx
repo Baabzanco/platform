@@ -28,11 +28,13 @@ import { CustomersListPage } from './components/pages/CustomersListPage';
 import { DriverPage } from './components/pages/DriverPage';
 import { FinancePage } from './components/pages/FinancePage';
 import { ProductionPage } from './components/pages/ProductionPage';
+import { ProductPhotosPage } from './components/pages/ProductPhotosPage';
 import { ReportsPage } from './components/pages/ReportsPage';
 import { ShippingPage } from './components/pages/ShippingPage';
 import { useAccessControl } from './hooks/useAccessControl';
 import { useCustomerStore } from './hooks/useCustomerStore';
 import { useOrderStore } from './hooks/useOrderStore';
+import { useProductPhotosStore } from './hooks/useProductPhotosStore';
 import { Department, Order, OrderItem, WorkflowDepartment } from './types/order';
 import { AccessControlHelpers } from './types/permissions';
 import {
@@ -76,6 +78,8 @@ export default function App() {
   const {
     groups,
     users,
+    currentUser,
+    currentUserGroup,
     toggleGroupPermission,
     setGroupSubgroupPermissions,
     setGroupCategoryPermissions,
@@ -104,6 +108,23 @@ export default function App() {
     addCallLog,
     resetCustomers,
   } = useCustomerStore();
+
+  const {
+    photos: productPhotos,
+    addPhotos: addProductPhotos,
+    updatePhotoTitle: updateProductPhotoTitle,
+    deletePhoto: deleteProductPhoto,
+    resetProductPhotos,
+  } = useProductPhotosStore();
+
+  const canUploadProductPhotos = Boolean(
+    currentUserGroup?.permissions.action_product_photos_upload?.view &&
+      currentUserGroup?.permissions.action_product_photos_upload?.edit
+  );
+  const canManageProductPhotos = Boolean(
+    currentUserGroup?.permissions.action_product_photos_manage?.view &&
+      currentUserGroup?.permissions.action_product_photos_manage?.edit
+  );
 
   const [activePage, setActivePage] = useState<Department>('production');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
@@ -291,7 +312,9 @@ export default function App() {
       <main className="print-container flex-1 overflow-y-auto px-3 py-3.5 pb-24 md:p-5 lg:p-6 md:pb-6">
         <div className="max-w-[1380px] mx-auto w-full flex flex-col gap-3.5 sm:gap-4">
           {/* Top Weekly Daily Calendar Bar */}
-          {activePage !== 'access' && activePage !== 'customers' && (
+          {activePage !== 'access' &&
+            activePage !== 'customers' &&
+            activePage !== 'product_photos' && (
             <DailyCalendarBar
               days={weekDays}
               selectedDateKey={selectedDateKey}
@@ -462,6 +485,19 @@ export default function App() {
                 onNotify={pushToast}
               />
             ))}
+
+          {activePage === 'product_photos' && (
+            <ProductPhotosPage
+              photos={productPhotos}
+              currentUserName={currentUser?.fullName ?? 'امیر مرادصالح'}
+              canUpload={canUploadProductPhotos}
+              canManage={canManageProductPhotos}
+              onAddPhotos={addProductPhotos}
+              onUpdatePhotoTitle={updateProductPhotoTitle}
+              onDeletePhoto={deleteProductPhoto}
+              onNotify={pushToast}
+            />
+          )}
         </div>
       </main>
 
@@ -606,6 +642,7 @@ export default function App() {
           resetDemoData();
           resetAccessControl();
           resetCustomers();
+          resetProductPhotos();
         }}
       />
     </div>

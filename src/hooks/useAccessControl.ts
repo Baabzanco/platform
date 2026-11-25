@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ALL_PERMISSION_KEYS,
   INITIAL_APP_USERS,
   INITIAL_USER_GROUPS,
   PERMISSION_GROUPS,
   buildPresetPermissions,
+  getCategoryPermissionKeys,
 } from '../data/permissionsCatalog';
 import {
   AccessPresetId,
   AppUser,
+  PermissionCategoryId,
   PermissionKey,
   PermissionMap,
   UserGroup,
@@ -22,11 +24,12 @@ interface PersistedGroupAccessState {
 }
 
 function normalizePermissionMap(
-  raw: Partial<PermissionMap> | undefined
+  raw: Partial<PermissionMap> | undefined,
+  fallback?: PermissionMap
 ): PermissionMap {
   const normalized = {} as PermissionMap;
   for (const key of ALL_PERMISSION_KEYS) {
-    const entry = raw?.[key];
+    const entry = raw?.[key] ?? fallback?.[key];
     const view = Boolean(entry?.view);
     const edit = view ? Boolean(entry?.edit) : false;
     normalized[key] = { view, edit };
@@ -44,10 +47,22 @@ function loadInitialGroupAccessState(): PersistedGroupAccessState {
         parsed.groups.length > 0 &&
         Array.isArray(parsed.users)
       ) {
-        const groups = parsed.groups.map((g) => ({
-          ...g,
-          permissions: normalizePermissionMap(g.permissions),
-        }));
+        const initialGroupById = new Map(
+          INITIAL_USER_GROUPS.map((g) => [g.id, g])
+        );
+
+        const groups = parsed.groups.map((g) => {
+          const template =
+            initialGroupById.get(g.id) ??
+            (g.isSystemGroup ? INITIAL_USER_GROUPS[0] : undefined);
+          return {
+            ...g,
+            permissions: normalizePermissionMap(
+              g.permissions,
+              template?.permissions
+            ),
+          };
+        });
         const validGroupIds = new Set(groups.map((g) => g.id));
         const fallbackGroupId = groups[0].id;
         const users = parsed.users.map((u) => ({
@@ -85,6 +100,17 @@ export function useAccessControl() {
       // Ignore storage quota errors
     }
   }, [groups, users]);
+
+  const currentUser = useMemo(
+    () =>
+      users.find((u) => u.id === 'user-admin' || u.isSystemAdmin) ?? users[0],
+    [users]
+  );
+
+  const currentUserGroup = useMemo(() => {
+    if (!currentUser) return groups[0];
+    return groups.find((g) => g.id === currentUser.groupId) ?? groups[0];
+  }, [groups, currentUser]);
 
   const toggleGroupPermission = useCallback(
     (groupId: string, key: PermissionKey, mode: 'view' | 'edit') => {
@@ -159,12 +185,20 @@ export function useAccessControl() {
   );
 
   const setGroupCategoryPermissions = useCallback(
-    (groupId: string, mode: 'view' | 'edit', value: boolean) => {
+    (
+      groupId: string,
+      categoryId: PermissionCategoryId,
+      mode: 'view' | 'edit',
+      value: boolean
+    ) => {
+      const categoryKeys = getCategoryPermissionKeys(categoryId);
+      if (categoryKeys.length === 0) return;
+
       setGroups((prev) =>
         prev.map((group) => {
           if (group.id !== groupId) return group;
           const nextPerms = { ...group.permissions };
-          for (const key of ALL_PERMISSION_KEYS) {
+          for (const key of categoryKeys) {
             const curr = nextPerms[key];
             if (mode === 'view') {
               nextPerms[key] = {
@@ -204,7 +238,8 @@ export function useAccessControl() {
         id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         name: name.trim(),
         description:
-          description.trim() || 'گروه کاربری سفارشی در کتگوری سفارشات',
+          description.trim() ||
+          'گروه کاربری سفارشی در کتگوری‌های سفارشات، طرف حساب‌ها و عکس محصولات',
         permissions: buildPresetPermissions(preset),
       };
       setGroups((prev) => [...prev, newGroup]);
@@ -273,6 +308,8 @@ export function useAccessControl() {
   return {
     groups,
     users,
+    currentUser,
+    currentUserGroup,
     toggleGroupPermission,
     setGroupSubgroupPermissions,
     setGroupCategoryPermissions,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   Factory,
   FileSpreadsheet,
+  Images,
   MoreHorizontal,
   Navigation,
   PieChart,
@@ -76,6 +77,12 @@ const NAV_ITEMS: Array<{
     shortLabel: 'طرف حساب‌ها',
     icon: Users,
   },
+  {
+    id: 'product_photos',
+    label: 'عکس محصولات',
+    shortLabel: 'عکس محصولات',
+    icon: Images,
+  },
 ];
 
 const MOBILE_PRIMARY_TABS: Department[] = [
@@ -103,7 +110,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isMoreActive =
     activePage === 'reports' ||
     activePage === 'access' ||
-    activePage === 'customers';
+    activePage === 'customers' ||
+    activePage === 'product_photos';
 
   return (
     <>
@@ -332,6 +340,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Users className="w-5 h-5 shrink-0" />
                 <span>لیست طرف حساب‌ها (مشتریان)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onSelectPage('product_photos');
+                }}
+                className={`w-full min-h-[48px] px-4 rounded-xl flex items-center gap-3 text-sm font-semibold transition-colors ${
+                  activePage === 'product_photos'
+                    ? 'bg-[#0f5864]/10 text-[#0f5864]'
+                    : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <Images className="w-5 h-5 shrink-0" />
+                <span>عکس محصولات</span>
               </button>
 
               <div className="my-2 border-t border-slate-100" />

@@ -1,5 +1,8 @@
+export type PermissionCategoryId = 'orders' | 'customers' | 'product_photos';
+
 export type PermissionKey =
-  // 1. Pages & Navigation
+  // ==================== 1. ORDERS CATEGORY ====================
+  // 1.1 Pages & Navigation
   | 'section_calendar'
   | 'section_production'
   | 'section_prep_matrix'
@@ -8,7 +11,7 @@ export type PermissionKey =
   | 'section_driver'
   | 'section_reports'
   | 'section_access_control'
-  // 2. Core Order & Customer Fields
+  // 1.2 Core Order & Customer Fields
   | 'field_order_code'
   | 'field_delivery_slot'
   | 'field_order_status'
@@ -18,7 +21,7 @@ export type PermissionKey =
   | 'field_address'
   | 'field_notes'
   | 'field_call_recording'
-  // 3. Items, Weights & Financial Amounts
+  // 1.3 Items, Weights & Financial Amounts
   | 'field_product_name'
   | 'field_requested_weight'
   | 'field_produced_weight'
@@ -28,28 +31,43 @@ export type PermissionKey =
   | 'field_unit_price'
   | 'field_item_total'
   | 'field_order_total'
-  // 4. Production Actions
+  // 1.4 Production Actions
   | 'action_production_weigh'
   | 'action_production_complete'
   | 'action_production_reject'
-  // 5. Invoice Issuance (Finance) Actions
+  // 1.5 Invoice Issuance (Finance) Actions
   | 'action_finance_approve'
   | 'action_finance_reject'
   | 'action_finance_verify_driver_docs'
   | 'action_finance_reject_driver_docs'
-  // 6. Shipping & Return Actions
+  // 1.6 Shipping & Return Actions
   | 'field_driver_assignment'
   | 'action_shipping_discrepancy'
   | 'action_shipping_deliver'
   | 'action_shipping_return'
   | 'action_return_confirm'
-  // 7. Driver Panel & General Tools
+  // 1.7 Driver Panel & General Tools
   | 'action_driver_route_priority'
   | 'field_driver_invoice_photo'
   | 'field_driver_receipt_photo'
   | 'action_driver_complete'
   | 'action_print'
-  | 'action_reset_data';
+  | 'action_reset_data'
+  // ==================== 2. CUSTOMERS LIST CATEGORY ====================
+  | 'section_customers_list'
+  | 'action_customer_create'
+  | 'action_customer_assign_rep'
+  | 'action_customer_send_sms'
+  | 'action_customer_toggle_active'
+  | 'section_customer_profile'
+  | 'field_customer_financial_standing'
+  | 'section_customer_accounting'
+  | 'section_customer_contacts'
+  | 'section_customer_events_chat'
+  // ==================== 3. PRODUCT PHOTOS CATEGORY ====================
+  | 'section_product_photos'
+  | 'action_product_photos_upload'
+  | 'action_product_photos_manage';
 
 export interface FieldPermission {
   view: boolean;
@@ -69,6 +87,13 @@ export interface PermissionGroup {
   title: string;
   description: string;
   items: PermissionDefinition[];
+}
+
+export interface PermissionCategory {
+  id: PermissionCategoryId;
+  title: string;
+  description: string;
+  subgroups: PermissionGroup[];
 }
 
 export type AccessPresetId =

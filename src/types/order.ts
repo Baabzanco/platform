@@ -5,7 +5,8 @@ export type Department =
   | 'driver'
   | 'reports'
   | 'access'
-  | 'customers';
+  | 'customers'
+  | 'product_photos';
 
 export type WorkflowDepartment = 'production' | 'finance' | 'shipping';
 
