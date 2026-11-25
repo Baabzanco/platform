@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DEPARTMENT_LABELS, INITIAL_ORDERS } from '../data/initialOrders';
 import {
+  ALL_DEPARTMENT_LABELS,
+  DEPARTMENT_LABELS,
+  INITIAL_ORDERS,
+} from '../data/initialOrders';
+import {
+  CreateOrderInput,
+  NotificationDepartment,
   Order,
+  ReturnToSalesSource,
   ToastNotification,
   ToastType,
   UnreadNotification,
@@ -9,13 +16,16 @@ import {
   WorkflowDepartment,
 } from '../types/order';
 import { formatTimeStamp } from '../utils/formatters';
-import { DEFAULT_SELECTED_DATE_KEY } from '../utils/jalaliCalendar';
+import {
+  DEFAULT_SELECTED_DATE_KEY,
+  toPersianDigits,
+} from '../utils/jalaliCalendar';
 
 const STORAGE_KEY = 'order_workflow_ts_state_v4';
 
 interface PersistedState {
   orders: Order[];
-  unreadByDept: Record<WorkflowDepartment, UnreadNotification[]>;
+  unreadByDept: Record<NotificationDepartment, UnreadNotification[]>;
 }
 
 const INITIAL_LOCATION_BY_ID = new Map(
@@ -62,11 +72,24 @@ function loadInitialState(): PersistedState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as PersistedState;
+      const parsed = JSON.parse(raw) as Partial<PersistedState>;
       if (Array.isArray(parsed.orders) && parsed.unreadByDept) {
         return {
           orders: normalizeOrders(parsed.orders),
-          unreadByDept: parsed.unreadByDept,
+          unreadByDept: {
+            sales: Array.isArray(parsed.unreadByDept.sales)
+              ? parsed.unreadByDept.sales
+              : [],
+            production: Array.isArray(parsed.unreadByDept.production)
+              ? parsed.unreadByDept.production
+              : [],
+            finance: Array.isArray(parsed.unreadByDept.finance)
+              ? parsed.unreadByDept.finance
+              : [],
+            shipping: Array.isArray(parsed.unreadByDept.shipping)
+              ? parsed.unreadByDept.shipping
+              : [],
+          },
         };
       }
     }
@@ -76,6 +99,7 @@ function loadInitialState(): PersistedState {
   return {
     orders: INITIAL_ORDERS,
     unreadByDept: {
+      sales: [],
       production: [],
       finance: [],
       shipping: [],
@@ -90,7 +114,7 @@ function createId(prefix: string): string {
 export function useOrderStore() {
   const [orders, setOrders] = useState<Order[]>(() => loadInitialState().orders);
   const [unreadByDept, setUnreadByDept] = useState<
-    Record<WorkflowDepartment, UnreadNotification[]>
+    Record<NotificationDepartment, UnreadNotification[]>
   >(() => loadInitialState().unreadByDept);
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
 
@@ -119,24 +143,29 @@ export function useOrderStore() {
   );
 
   const queueDeptNotification = useCallback(
-    (dept: WorkflowDepartment, title: string, message: string, type: ToastType) => {
+    (
+      dept: NotificationDepartment,
+      title: string,
+      message: string,
+      type: ToastType
+    ) => {
       const entry: UnreadNotification = {
         id: createId('notif'),
         title,
         message,
-        deptLabel: `اعلان ویژه ${DEPARTMENT_LABELS[dept]}`,
+        deptLabel: `اعلان ویژه ${ALL_DEPARTMENT_LABELS[dept]}`,
         type,
       };
       setUnreadByDept((prev) => ({
         ...prev,
-        [dept]: [...prev[dept], entry],
+        [dept]: [...(prev[dept] ?? []), entry],
       }));
     },
     []
   );
 
   const flushDeptNotifications = useCallback(
-    (dept: WorkflowDepartment) => {
+    (dept: NotificationDepartment) => {
       setUnreadByDept((prev) => {
         const queued = prev[dept];
         if (!queued || queued.length === 0) return prev;
@@ -174,6 +203,165 @@ export function useOrderStore() {
       });
     },
     []
+  );
+
+  // 0a. Sales Specialist: create new invoice/order and send straight to Production
+  const createOrder = useCallback(
+    (input: CreateOrderInput): Order => {
+      const now = Date.now();
+      const maxCode = orders.reduce((max, o) => {
+        const parsed = parseInt(o.code, 10);
+        return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+      }, 39268);
+      const nextCode = String(maxCode + 1);
+      const orderId = createId('order');
+
+      const dayOrdersCount = orders.filter(
+        (o) => o.deliveryDate === input.deliveryDate
+      ).length;
+
+      const dateParts = input.deliveryDate.split('-');
+      const persianDate =
+        dateParts.length === 3
+          ? `${toPersianDigits(dateParts[0])}/${toPersianDigits(dateParts[1])}/${toPersianDigits(dateParts[2])}`
+          : toPersianDigits(input.deliveryDate);
+      const nowDate = new Date();
+      const hh = toPersianDigits(String(nowDate.getHours()).padStart(2, '0'));
+      const mm = toPersianDigits(String(nowDate.getMinutes()).padStart(2, '0'));
+
+      const newOrder: Order = {
+        id: orderId,
+        code: nextCode,
+        deliverySlot: input.deliverySlot,
+        customerName: input.customerName.trim(),
+        customerPhone: input.customerPhone.trim(),
+        district: input.district.trim() || 'تهران',
+        address: input.address.trim(),
+        notes: input.notes.trim() || 'ثبت‌شده توسط کارشناس فروش',
+        callDurationSeconds: 0,
+        status: 'in_production',
+        driverName: '',
+        routeOrder: dayOrdersCount + 1,
+        deliveryDate: input.deliveryDate,
+        seenByDept: {
+          production: false,
+          finance: false,
+          shipping: false,
+        },
+        createdAt: `${persianDate} - ${hh}:${mm}`,
+        lastActionAt: now,
+        items: input.items.map((item, idx) => ({
+          id: `${orderId}-item-${idx + 1}`,
+          productName: item.productName.trim(),
+          requestedWeight: item.requestedWeight,
+          producedWeight: null,
+          revisedWeight: null,
+          previousWeightBeforeDiscrepancy: null,
+          deliveredWeight: null,
+          returnedWeight: 0,
+          unitPrice: item.unitPrice,
+        })),
+      };
+
+      setOrders((prev) => [newOrder, ...prev]);
+
+      const title = `ثبت فاکتور جدید — سفارش ${nextCode}`;
+      const message = `سفارش ${nextCode} برای «${newOrder.customerName}» ثبت شد و جهت آماده‌سازی و توزین به بخش تولید ارسال گردید.`;
+      pushToast(title, message, 'ارسال به بخش تولید', 'success');
+      queueDeptNotification('production', title, message, 'info');
+
+      return newOrder;
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 0b. Sales Specialist: edit & re-submit a returned_to_sales order back to Production
+  const resubmitOrderToProduction = useCallback(
+    (orderId: string, input: CreateOrderInput) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target) return;
+
+      const now = Date.now();
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          return {
+            ...order,
+            customerName: input.customerName.trim(),
+            customerPhone: input.customerPhone.trim(),
+            district: input.district.trim() || 'تهران',
+            address: input.address.trim(),
+            deliveryDate: input.deliveryDate,
+            deliverySlot: input.deliverySlot,
+            notes: input.notes.trim() || 'اصلاح و ارسال مجدد توسط کارشناس فروش',
+            status: 'in_production',
+            driverName: '',
+            salesReturn: undefined,
+            rejection: undefined,
+            discrepancy: undefined,
+            returnRecord: undefined,
+            driverDelivery: undefined,
+            seenByDept: {
+              production: false,
+              finance: false,
+              shipping: false,
+            },
+            lastActionAt: now,
+            items: input.items.map((item, idx) => ({
+              id: `${orderId}-rev-${now}-${idx + 1}`,
+              productName: item.productName.trim(),
+              requestedWeight: item.requestedWeight,
+              producedWeight: null,
+              revisedWeight: null,
+              previousWeightBeforeDiscrepancy: null,
+              deliveredWeight: null,
+              returnedWeight: 0,
+              unitPrice: item.unitPrice,
+            })),
+          };
+        })
+      );
+
+      const title = `ارسال مجدد سفارش ${target.code} به تولید`;
+      const message = `سفارش ${target.code} پس از اصلاح توسط کارشناس فروش مجدداً به صف تولید ارسال شد.`;
+      pushToast(title, message, 'بخش کارشناس فروش', 'success');
+      queueDeptNotification('production', title, message, 'info');
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 0c. Any Stage (Production / Finance / Shipping / Driver): return order back to Sales
+  const returnOrderToSales = useCallback(
+    (orderId: string, source: ReturnToSalesSource, reason: string) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target) return;
+
+      const sourceName = ALL_DEPARTMENT_LABELS[source];
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          return {
+            ...order,
+            status: 'returned_to_sales',
+            lastActionAt: now,
+            salesReturn: {
+              source,
+              reason,
+              timestamp: stamp,
+            },
+          };
+        })
+      );
+
+      const title = `برگشت سفارش ${target.code} به فروش`;
+      const message = `سفارش ${target.code} (${target.customerName}) از ${sourceName} به کارشناس فروش برگشت داده شد. علت: ${reason}`;
+      pushToast(title, message, 'ارجاع به بخش کارشناس فروش', 'warning');
+      queueDeptNotification('sales', title, message, 'warning');
+    },
+    [orders, pushToast, queueDeptNotification]
   );
 
   // 1. Production: record exact produced weight for an item
@@ -777,7 +965,7 @@ export function useOrderStore() {
   // 16. Reset demo dataset
   const resetDemoData = useCallback(() => {
     setOrders(INITIAL_ORDERS);
-    setUnreadByDept({ production: [], finance: [], shipping: [] });
+    setUnreadByDept({ sales: [], production: [], finance: [], shipping: [] });
     localStorage.removeItem(STORAGE_KEY);
     pushToast(
       'بازنشانی داده‌ها انجام شد',
@@ -795,6 +983,9 @@ export function useOrderStore() {
     pushToast,
     flushDeptNotifications,
     markDateSeenByDept,
+    createOrder,
+    resubmitOrderToProduction,
+    returnOrderToSales,
     recordItemWeight,
     completeProduction,
     approveFinance,

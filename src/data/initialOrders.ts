@@ -1,10 +1,46 @@
-import { Driver, Order, WorkflowDepartment } from '../types/order';
+import {
+  Driver,
+  Order,
+  ProductCatalogItem,
+  ReturnToSalesSource,
+  WorkflowDepartment,
+} from '../types/order';
 
 export const DEPARTMENT_LABELS: Record<WorkflowDepartment, string> = {
   production: 'بخش تولید',
   finance: 'بخش صدور فاکتور',
   shipping: 'بخش ارسال',
 };
+
+export const ALL_DEPARTMENT_LABELS: Record<ReturnToSalesSource | 'sales', string> = {
+  sales: 'بخش کارشناس فروش',
+  production: 'بخش تولید',
+  finance: 'بخش صدور فاکتور',
+  shipping: 'بخش ارسال',
+  driver: 'پنل رانندگان',
+};
+
+export const DELIVERY_SLOTS: string[] = [
+  '۱۰ تا ۱۲',
+  '۱۱ تا ۱۳',
+  '۱۲ تا ۱۴',
+  '۱۳ تا ۱۵',
+  '۱۴ تا ۱۶',
+  '۱۵ تا ۱۷',
+  '۱۶ تا ۱۸',
+  '۱۸ تا ۲۰',
+];
+
+export const PRODUCT_CATALOG: ProductCatalogItem[] = [
+  { name: 'خرده بدن بره', defaultUnitPrice: 9_200_000 },
+  { name: 'راسته بره', defaultUnitPrice: 10_500_000 },
+  { name: 'قلوه گاه تکر بره', defaultUnitPrice: 14_500_000 },
+  { name: 'ران معمولی', defaultUnitPrice: 16_800_000 },
+  { name: 'خورشتی ران', defaultUnitPrice: 17_400_000 },
+  { name: 'سردست بدون گردن ممتاز', defaultUnitPrice: 18_600_000 },
+  { name: 'ماهیچه گوسفندی', defaultUnitPrice: 22_000_000 },
+  { name: 'فیله گوسفندی', defaultUnitPrice: 24_500_000 },
+];
 
 export const DRIVERS: Driver[] = [
   { id: 'd-1', name: 'رضا احمدی', vehicle: 'کامیون یخچالدار' },

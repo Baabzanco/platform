@@ -5,10 +5,10 @@ import {
   Edit3,
   Eye,
   FolderKanban,
-  Images,
   Info,
   Layers,
   Link2,
+  MonitorPlay,
   Plus,
   Search,
   ShieldCheck,
@@ -90,7 +90,7 @@ const CATEGORY_VISUALS: Record<
     borderClass: 'border-slate-300',
   },
   product_photos: {
-    icon: Images,
+    icon: MonitorPlay,
     headerBg: 'bg-[#115e59]',
     borderClass: 'border-teal-300',
   },
@@ -387,7 +387,7 @@ export const AccessControlPage: React.FC<AccessControlPageProps> = ({
         <span>
           <strong>ساختار ۳ کتگوری سطح دسترسی:</strong> مجوزهای هر گروه کاربری در سه کتگوری مجزا شامل{' '}
           <strong>سفارشات</strong>، <strong>لیست طرف حساب‌ها</strong> و{' '}
-          <strong>عکس محصولات</strong> (از جمله مجوز آپلود عکس) تنظیم می‌شود. تغییر مجوز آپلود عکس محصولات برای گروه کاربر فعال به‌صورت زنده در صفحه «عکس محصولات» اعمال می‌گردد.
+          <strong>مدیا آموزشی</strong> (تب ویدیوهای آموزشی و تب عکس محصولات) تنظیم می‌شود. تغییر مجوزهای مشاهده و آپلود در مدیا آموزشی برای گروه کاربر فعال به‌صورت زنده در صفحه «مدیا آموزشی» اعمال می‌گردد.
         </span>
       </div>
 
@@ -755,7 +755,7 @@ export const AccessControlPage: React.FC<AccessControlPageProps> = ({
                         type="text"
                         value={permSearch}
                         onChange={(e) => setPermSearch(e.target.value)}
-                        placeholder="جستجو در مجوزها (آپلود عکس، طرف حساب، فاکتور...)"
+                        placeholder="جستجو در مجوزها (آپلود ویدیو، آپلود عکس، طرف حساب...)"
                         className="w-full h-10 sm:h-9 pr-9 sm:pr-8 pl-3 text-xs bg-slate-50 border border-slate-200 rounded-xl sm:rounded-lg focus:outline-none focus:bg-white focus:border-[#0f5864]"
                       />
                     </div>
@@ -1368,6 +1368,12 @@ export const AccessControlPage: React.FC<AccessControlPageProps> = ({
                     assignedGroup?.permissions.action_product_photos_upload
                       ?.edit
                 );
+                const canUploadVideos = Boolean(
+                  assignedGroup?.permissions.action_training_videos_upload
+                    ?.view &&
+                    assignedGroup?.permissions.action_training_videos_upload
+                      ?.edit
+                );
 
                 return (
                   <div
@@ -1397,6 +1403,18 @@ export const AccessControlPage: React.FC<AccessControlPageProps> = ({
                         <span>
                           دسترسی کل: مشاهده {toPersianDigits(counts.view)} /
                           ویرایش {toPersianDigits(counts.edit)}
+                        </span>
+                        <span aria-hidden="true" className="text-slate-300">
+                          ·
+                        </span>
+                        <span
+                          className={
+                            canUploadVideos
+                              ? 'text-emerald-700 font-semibold'
+                              : 'text-slate-400'
+                          }
+                        >
+                          آپلود ویدیو: {canUploadVideos ? 'مجاز' : 'غیرمجاز'}
                         </span>
                         <span aria-hidden="true" className="text-slate-300">
                           ·

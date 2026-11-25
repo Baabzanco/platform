@@ -10,6 +10,7 @@ import {
   Printer,
   RotateCcw,
   Search,
+  Undo2,
 } from 'lucide-react';
 import { Order, OrderItem } from '../../types/order';
 import { AccessControlHelpers } from '../../types/permissions';
@@ -32,6 +33,7 @@ type ProdFilter =
   | 'all'
   | 'in_progress'
   | 'completed'
+  | 'returned_to_sales'
   | 'returned'
   | 'rejected';
 
@@ -68,8 +70,9 @@ function getProductionSortRank(order: Order): number {
   if (isReadyForFinalApprovalInProd(order)) return 1;
   if (order.status === 'in_production') return 2;
   if (isCompletedInProd(order)) return 3;
-  if (order.status === 'returned') return 4;
-  return 5;
+  if (order.status === 'returned_to_sales') return 4;
+  if (order.status === 'returned') return 5;
+  return 6;
 }
 
 export const ProductionPage: React.FC<ProductionPageProps> = ({
@@ -90,6 +93,8 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
         statusFilter === 'all' ||
         (statusFilter === 'in_progress' && order.status === 'in_production') ||
         (statusFilter === 'completed' && isCompletedInProd(order)) ||
+        (statusFilter === 'returned_to_sales' &&
+          order.status === 'returned_to_sales') ||
         (statusFilter === 'returned' && order.status === 'returned') ||
         (statusFilter === 'rejected' && order.status === 'rejected');
 
@@ -225,6 +230,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                     { id: 'all', label: 'همه' },
                     { id: 'in_progress', label: 'آماده توزین' },
                     { id: 'completed', label: 'ارسال به فاکتور' },
+                    { id: 'returned_to_sales', label: 'برگشت به فروش' },
                     { id: 'returned', label: 'مرجوعی' },
                     { id: 'rejected', label: 'رد شده' },
                   ] as Array<{ id: ProdFilter; label: string }>
@@ -275,6 +281,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
             sortedAndFilteredOrders.map((order, index) => {
               const completed = isCompletedInProd(order);
               const readyForFinalApproval = isReadyForFinalApprovalInProd(order);
+              const returnedToSales = order.status === 'returned_to_sales';
               const rejected = order.status === 'rejected';
               const returned = order.status === 'returned';
               const pendingReturnConfirm = isPendingReturnConfirmInProd(order);
@@ -286,11 +293,13 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                 ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
                 : readyForFinalApproval
                   ? 'border-2 border-emerald-500 bg-emerald-50/90 shadow-md ring-2 ring-emerald-500/20 hover:bg-emerald-100/75'
-                  : rejected || returned
-                    ? 'border border-red-300 bg-red-50/20'
-                    : completed
-                      ? 'border border-slate-300 bg-slate-50/70'
-                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
+                  : returnedToSales
+                    ? 'border border-amber-400 bg-amber-50/35'
+                    : rejected || returned
+                      ? 'border border-red-300 bg-red-50/20'
+                      : completed
+                        ? 'border border-slate-300 bg-slate-50/70'
+                        : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
               return (
                 <React.Fragment key={order.id}>
@@ -313,6 +322,18 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                       onClick={() => onSelectOrder(order.id)}
                       className="w-full text-right block active:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
                     >
+                      {returnedToSales && (
+                        <div className="no-print px-4 sm:px-5 py-2 bg-amber-100 text-amber-900 border-b border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                            برگشت‌خورده به کارشناس فروش (در انتظار اصلاح)
+                          </span>
+                          <span className="text-[11px] font-medium truncate max-w-[260px]">
+                            {order.salesReturn?.reason}
+                          </span>
+                        </div>
+                      )}
+
                       {pendingReturnConfirm && (
                         <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                           <span className="inline-flex items-center gap-1.5">

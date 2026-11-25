@@ -6,9 +6,16 @@ import {
   RotateCw,
   Scale,
   Truck,
+  Undo2,
   X,
 } from 'lucide-react';
-import { Order, OrderItem, WorkflowDepartment } from '../../types/order';
+import { ALL_DEPARTMENT_LABELS } from '../../data/initialOrders';
+import {
+  Order,
+  OrderItem,
+  ReturnToSalesSource,
+  WorkflowDepartment,
+} from '../../types/order';
 import { getFinanceWeight, getShippingWeight } from '../../utils/formatters';
 
 interface BaseModalProps {
@@ -940,6 +947,157 @@ export const ResetConfirmModal: React.FC<ResetConfirmModalProps> = ({
       <p className="text-sm text-slate-700 leading-relaxed">
         آیا مطمئن هستید که می‌خواهید تمامی سفارش‌های ثبت‌شده، تغییرات وزن، تاییدها، مدارک تحویل و مرجوعی‌ها را پاک کرده و داده‌های نمونه اولیه را بازگردانی کنید؟
       </p>
+    </ModalShell>
+  );
+};
+
+/* ================= 7. Return Order to Sales Modal (All Stages -> Sales) ================= */
+interface ReturnToSalesModalProps {
+  open: boolean;
+  order: Order | null;
+  source: ReturnToSalesSource;
+  onClose: () => void;
+  onSubmit: (reason: string) => void;
+}
+
+const QUICK_RETURN_TO_SALES_REASONS: Record<ReturnToSalesSource, string[]> = {
+  production: [
+    'موجودی محصول در سردخانه ناکافی است و نیاز به اصلاح فاکتور دارد',
+    'توضیحات یا نوع برش درخواستی مشتری نامشخص است',
+    'بازه زمانی ارسال برای تولید قابل انجام نیست',
+  ],
+  finance: [
+    'مغایرت در قیمت واحد یا جمع فاکتور و نیاز به اصلاح فروش',
+    'وضعیت اعتبار یا تسویه مشتری نیاز به هماهنگی کارشناس فروش دارد',
+    'اطلاعات طرف حساب یا شماره تماس مشتری ناقص است',
+  ],
+  shipping: [
+    'آدرس یا محدوده تحویل ناقص است و نیاز به اصلاح فروش دارد',
+    'بازه ارسال انتخاب‌شده با برنامه مسیر هماهنگ نیست',
+    'مشتری درخواست تغییر اقلام یا زمان ارسال داده است',
+  ],
+  driver: [
+    'مشتری در محل حضور ندارد و نیاز به هماهنگی مجدد فروش است',
+    'مشتری درخواست اصلاح فاکتور یا تغییر زمان تحویل دارد',
+    'آدرس ثبت‌شده در فاکتور با محل واقعی مشتری تطابق ندارد',
+  ],
+};
+
+export const ReturnToSalesModal: React.FC<ReturnToSalesModalProps> = ({
+  open,
+  order,
+  source,
+  onClose,
+  onSubmit,
+}) => {
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) {
+      setReason('');
+      setError('');
+    }
+  }, [open]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!reason.trim()) {
+      setError('لطفاً علت برگشت سفارش به بخش فروش را وارد کنید.');
+      return;
+    }
+    onSubmit(reason.trim());
+    onClose();
+  };
+
+  const presets = QUICK_RETURN_TO_SALES_REASONS[source];
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      tone="warning"
+      icon={<Undo2 className="w-4 h-4 shrink-0" />}
+      title={`برگشت سفارش ${order?.code ?? ''} به فروش (${ALL_DEPARTMENT_LABELS[source]})`}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            انصراف
+          </button>
+          <button
+            type="submit"
+            form="return-to-sales-form"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-amber-600 rounded-xl sm:rounded-lg hover:bg-amber-700 transition-colors"
+          >
+            برگشت سفارش به فروش
+          </button>
+        </>
+      }
+    >
+      <form id="return-to-sales-form" onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-slate-600 leading-relaxed">
+          با ثبت این درخواست، سفارش <strong className="tabular-nums text-slate-900">{order?.code}</strong> ({order?.customerName}) از{' '}
+          <strong className="text-amber-800">{ALL_DEPARTMENT_LABELS[source]}</strong> متوقف شده و در بالای صف صفحه{' '}
+          <strong className="text-slate-900">کارشناس فروش</strong> جهت اصلاح و ارسال مجدد قرار می‌گیرد.
+        </p>
+
+        <div className="space-y-2">
+          <span className="block text-xs font-medium text-slate-600">
+            دلایل پرتکرار (انتخاب سریع):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {presets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  setReason(preset);
+                  setError('');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors text-right ${
+                  reason === preset
+                    ? 'bg-amber-600 text-white border-amber-600'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-amber-300 hover:bg-amber-50'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="return-to-sales-reason"
+            className="block text-xs font-bold text-slate-800"
+          >
+            علت و توضیحات برگشت سفارش به کارشناس فروش:
+          </label>
+          <textarea
+            id="return-to-sales-reason"
+            rows={3}
+            autoFocus
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError('');
+            }}
+            placeholder="توضیحات دقیق جهت اصلاح فاکتور توسط کارشناس فروش را بنویسید..."
+            className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-600"
+          />
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </p>
+        )}
+      </form>
     </ModalShell>
   );
 };

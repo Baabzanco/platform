@@ -12,6 +12,7 @@ import {
   LocationMapModal,
   LocationModalMode,
 } from './components/modals/LocationMapModal';
+import { NewInvoiceModal } from './components/modals/NewInvoiceModal';
 import { OrderDetailModal } from './components/modals/OrderDetailModal';
 import {
   DeliveryModal,
@@ -20,6 +21,7 @@ import {
   RejectModal,
   ResetConfirmModal,
   ReturnModal,
+  ReturnToSalesModal,
   WeightModal,
 } from './components/modals/OrderModals';
 import { AccessControlPage } from './components/pages/AccessControlPage';
@@ -30,12 +32,21 @@ import { FinancePage } from './components/pages/FinancePage';
 import { ProductionPage } from './components/pages/ProductionPage';
 import { ProductPhotosPage } from './components/pages/ProductPhotosPage';
 import { ReportsPage } from './components/pages/ReportsPage';
+import { SalesPage } from './components/pages/SalesPage';
 import { ShippingPage } from './components/pages/ShippingPage';
 import { useAccessControl } from './hooks/useAccessControl';
 import { useCustomerStore } from './hooks/useCustomerStore';
 import { useOrderStore } from './hooks/useOrderStore';
 import { useProductPhotosStore } from './hooks/useProductPhotosStore';
-import { Department, Order, OrderItem, WorkflowDepartment } from './types/order';
+import { useTrainingVideosStore } from './hooks/useTrainingVideosStore';
+import {
+  Department,
+  NotificationDepartment,
+  Order,
+  OrderItem,
+  ReturnToSalesSource,
+  WorkflowDepartment,
+} from './types/order';
 import { AccessControlHelpers } from './types/permissions';
 import {
   DEFAULT_SELECTED_DATE_KEY,
@@ -72,6 +83,9 @@ export default function App() {
     completeDriverDelivery,
     verifyDriverDocumentsInFinance,
     rejectDriverDocumentsInFinance,
+    createOrder,
+    resubmitOrderToProduction,
+    returnOrderToSales,
     resetDemoData,
   } = useOrderStore();
 
@@ -117,6 +131,17 @@ export default function App() {
     resetProductPhotos,
   } = useProductPhotosStore();
 
+  const {
+    videos: trainingVideos,
+    addVideo: addTrainingVideo,
+    updateVideo: updateTrainingVideo,
+    deleteVideo: deleteTrainingVideo,
+    resetTrainingVideos,
+  } = useTrainingVideosStore();
+
+  const canViewProductPhotos = Boolean(
+    currentUserGroup?.permissions.section_product_photos?.view
+  );
   const canUploadProductPhotos = Boolean(
     currentUserGroup?.permissions.action_product_photos_upload?.view &&
       currentUserGroup?.permissions.action_product_photos_upload?.edit
@@ -125,8 +150,19 @@ export default function App() {
     currentUserGroup?.permissions.action_product_photos_manage?.view &&
       currentUserGroup?.permissions.action_product_photos_manage?.edit
   );
+  const canViewTrainingVideos = Boolean(
+    currentUserGroup?.permissions.section_training_videos?.view
+  );
+  const canUploadTrainingVideos = Boolean(
+    currentUserGroup?.permissions.action_training_videos_upload?.view &&
+      currentUserGroup?.permissions.action_training_videos_upload?.edit
+  );
+  const canManageTrainingVideos = Boolean(
+    currentUserGroup?.permissions.action_training_videos_manage?.view &&
+      currentUserGroup?.permissions.action_training_videos_manage?.edit
+  );
 
-  const [activePage, setActivePage] = useState<Department>('production');
+  const [activePage, setActivePage] = useState<Department>('sales');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
     null
   );
@@ -138,6 +174,14 @@ export default function App() {
   const [printingOrderId, setPrintingOrderId] = useState<string | null>(null);
 
   // Action Sub-Modal states
+  const [invoiceModalState, setInvoiceModalState] = useState<{
+    open: boolean;
+    editingOrder: Order | null;
+  }>({ open: false, editingOrder: null });
+  const [returnToSalesTarget, setReturnToSalesTarget] = useState<{
+    order: Order;
+    source: ReturnToSalesSource;
+  } | null>(null);
   const [weightTarget, setWeightTarget] = useState<{
     order: Order;
     item: OrderItem;
@@ -223,6 +267,8 @@ export default function App() {
       : null;
 
   const hasSubModalOpen =
+    invoiceModalState.open ||
+    returnToSalesTarget !== null ||
     weightTarget !== null ||
     rejectTarget !== null ||
     rejectDriverDocsOrder !== null ||
@@ -241,7 +287,12 @@ export default function App() {
     setSelectedOrderId(null);
     setSelectedCustomerId(null);
     setActivePage(page);
-    if (page === 'production' || page === 'finance' || page === 'shipping') {
+    if (
+      page === 'sales' ||
+      page === 'production' ||
+      page === 'finance' ||
+      page === 'shipping'
+    ) {
       flushDeptNotifications(page);
     }
   };
@@ -293,7 +344,8 @@ export default function App() {
     );
   };
 
-  const unreadCounts: Record<WorkflowDepartment, number> = {
+  const unreadCounts: Record<NotificationDepartment, number> = {
+    sales: unreadByDept.sales.length,
     production: unreadByDept.production.length,
     finance: unreadByDept.finance.length,
     shipping: unreadByDept.shipping.length,
@@ -322,6 +374,23 @@ export default function App() {
               onSelectDate={handleSelectDate}
               onPrevWeek={() => setWeekOffset((w) => w - 1)}
               onNextWeek={() => setWeekOffset((w) => w + 1)}
+            />
+          )}
+
+          {activePage === 'sales' && (
+            <SalesPage
+              orders={dayOrders}
+              printingOrderId={printingOrderId}
+              access={FULL_ACCESS}
+              onPrintAll={handlePrintAll}
+              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+              onOpenNewInvoice={() =>
+                setInvoiceModalState({ open: true, editingOrder: null })
+              }
+              onEditReturnedOrder={(order) =>
+                setInvoiceModalState({ open: true, editingOrder: order })
+              }
+              onCallCustomer={handleCallCustomer}
             />
           )}
 
@@ -367,6 +436,9 @@ export default function App() {
                 setLocationModal({ orderId: order.id, mode })
               }
               onCallCustomer={handleCallCustomer}
+              onOpenReturnToSales={(order) =>
+                setReturnToSalesTarget({ order, source: 'driver' })
+              }
             />
           )}
 
@@ -489,12 +561,20 @@ export default function App() {
           {activePage === 'product_photos' && (
             <ProductPhotosPage
               photos={productPhotos}
+              videos={trainingVideos}
               currentUserName={currentUser?.fullName ?? 'امیر مرادصالح'}
-              canUpload={canUploadProductPhotos}
-              canManage={canManageProductPhotos}
+              canViewPhotos={canViewProductPhotos}
+              canUploadPhotos={canUploadProductPhotos}
+              canManagePhotos={canManageProductPhotos}
+              canViewVideos={canViewTrainingVideos}
+              canUploadVideos={canUploadTrainingVideos}
+              canManageVideos={canManageTrainingVideos}
               onAddPhotos={addProductPhotos}
               onUpdatePhotoTitle={updateProductPhotoTitle}
               onDeletePhoto={deleteProductPhoto}
+              onAddVideo={addTrainingVideo}
+              onUpdateVideo={updateTrainingVideo}
+              onDeleteVideo={deleteTrainingVideo}
               onNotify={pushToast}
             />
           )}
@@ -504,11 +584,11 @@ export default function App() {
       {/* Toasts */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Main Order Detail & Action Popup Modal (Production / Finance / Shipping) */}
-      {activeWorkflowDept && (
+      {/* Main Order Detail & Action Popup Modal (Sales / Production / Finance / Shipping) */}
+      {(activePage === 'sales' || activeWorkflowDept !== null) && (
         <OrderDetailModal
           order={selectedOrder}
-          department={activeWorkflowDept}
+          department={activePage === 'sales' ? 'sales' : activeWorkflowDept!}
           access={FULL_ACCESS}
           disableEscape={hasSubModalOpen}
           onClose={() => setSelectedOrderId(null)}
@@ -525,6 +605,12 @@ export default function App() {
           onOpenReturn={(order) => setReturnOrder(order)}
           onDriverMissingWarning={handleDriverMissingWarning}
           onOpenReject={(order, source) => setRejectTarget({ order, source })}
+          onOpenReturnToSales={(order, source) =>
+            setReturnToSalesTarget({ order, source })
+          }
+          onEditReturnedOrder={(order) =>
+            setInvoiceModalState({ open: true, editingOrder: order })
+          }
           onConfirmReturn={confirmReturnByDepartment}
         />
       )}
@@ -534,7 +620,7 @@ export default function App() {
         <DriverOrderModal
           order={selectedOrder?.status === 'delivered' ? selectedOrder : null}
           access={FULL_ACCESS}
-          disableEscape={locationModal !== null}
+          disableEscape={locationModal !== null || returnToSalesTarget !== null}
           onClose={() => setSelectedOrderId(null)}
           onCallCustomer={handleCallCustomer}
           onOpenLocationModal={(order, mode) =>
@@ -543,6 +629,9 @@ export default function App() {
           onUploadDocument={uploadDriverDocument}
           onRemoveDocument={removeDriverDocument}
           onCompleteDelivery={completeDriverDelivery}
+          onOpenReturnToSales={(order) =>
+            setReturnToSalesTarget({ order, source: 'driver' })
+          }
         />
       )}
 
@@ -631,18 +720,61 @@ export default function App() {
         }}
       />
 
+      {/* Sales Specialist: New Invoice / Edit Returned Order Modal */}
+      <NewInvoiceModal
+        open={invoiceModalState.open}
+        editingOrder={invoiceModalState.editingOrder}
+        defaultDateKey={selectedDateKey}
+        weekDays={weekDays}
+        customers={customers}
+        onClose={() => setInvoiceModalState({ open: false, editingOrder: null })}
+        onCreateOrder={(input) => {
+          createOrder(input);
+          if (input.deliveryDate !== selectedDateKey) {
+            setSelectedDateKey(input.deliveryDate);
+          }
+        }}
+        onResubmitOrder={(orderId, input) => {
+          resubmitOrderToProduction(orderId, input);
+          if (input.deliveryDate !== selectedDateKey) {
+            setSelectedDateKey(input.deliveryDate);
+          }
+        }}
+      />
+
+      {/* Return Order to Sales Modal (Available across Production, Finance, Shipping, Driver) */}
+      <ReturnToSalesModal
+        open={returnToSalesTarget !== null}
+        order={returnToSalesTarget?.order ?? null}
+        source={returnToSalesTarget?.source ?? 'production'}
+        onClose={() => setReturnToSalesTarget(null)}
+        onSubmit={(reason) => {
+          if (returnToSalesTarget) {
+            returnOrderToSales(
+              returnToSalesTarget.order.id,
+              returnToSalesTarget.source,
+              reason
+            );
+            setSelectedOrderId(null);
+          }
+        }}
+      />
+
       <ResetConfirmModal
         open={resetOpen}
         onClose={() => setResetOpen(false)}
         onConfirm={() => {
           setSelectedOrderId(null);
           setSelectedCustomerId(null);
+          setInvoiceModalState({ open: false, editingOrder: null });
+          setReturnToSalesTarget(null);
           setWeekOffset(0);
           setSelectedDateKey(DEFAULT_SELECTED_DATE_KEY);
           resetDemoData();
           resetAccessControl();
           resetCustomers();
           resetProductPhotos();
+          resetTrainingVideos();
         }}
       />
     </div>

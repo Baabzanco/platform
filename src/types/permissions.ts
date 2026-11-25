@@ -4,6 +4,7 @@ export type PermissionKey =
   // ==================== 1. ORDERS CATEGORY ====================
   // 1.1 Pages & Navigation
   | 'section_calendar'
+  | 'section_sales'
   | 'section_production'
   | 'section_prep_matrix'
   | 'section_finance'
@@ -31,7 +32,9 @@ export type PermissionKey =
   | 'field_unit_price'
   | 'field_item_total'
   | 'field_order_total'
-  // 1.4 Production Actions
+  // 1.4 Sales & Production Actions
+  | 'action_sales_create_order'
+  | 'action_return_to_sales'
   | 'action_production_weigh'
   | 'action_production_complete'
   | 'action_production_reject'
@@ -64,10 +67,13 @@ export type PermissionKey =
   | 'section_customer_accounting'
   | 'section_customer_contacts'
   | 'section_customer_events_chat'
-  // ==================== 3. PRODUCT PHOTOS CATEGORY ====================
+  // ==================== 3. TRAINING MEDIA CATEGORY ====================
   | 'section_product_photos'
   | 'action_product_photos_upload'
-  | 'action_product_photos_manage';
+  | 'action_product_photos_manage'
+  | 'section_training_videos'
+  | 'action_training_videos_upload'
+  | 'action_training_videos_manage';
 
 export interface FieldPermission {
   view: boolean;
@@ -98,6 +104,7 @@ export interface PermissionCategory {
 
 export type AccessPresetId =
   | 'admin_full'
+  | 'sales_specialist'
   | 'production_operator'
   | 'finance_specialist'
   | 'shipping_coordinator'

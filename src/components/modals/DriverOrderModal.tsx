@@ -16,6 +16,7 @@ import {
   Receipt,
   RefreshCw,
   Trash2,
+  Undo2,
   X,
 } from 'lucide-react';
 import { Order, UploadedDocumentPhoto } from '../../types/order';
@@ -42,6 +43,7 @@ interface DriverOrderModalProps {
     docType: 'invoice' | 'paymentReceipt'
   ) => void;
   onCompleteDelivery: (orderId: string) => void;
+  onOpenReturnToSales: (order: Order) => void;
 }
 
 export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
@@ -53,6 +55,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   onUploadDocument,
   onRemoveDocument,
   onCompleteDelivery,
+  onOpenReturnToSales,
 }) => {
   const invoiceInputRef = useRef<HTMLInputElement>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
@@ -692,13 +695,23 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   تحویل تکمیل شد و عکس فاکتور و رسید پرداخت به بخش صدور فاکتور ارسال گردید.
                 </span>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
-                >
-                  بستن
-                </button>
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReturnToSales(order)}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                    برگشت سفارش به فروش
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  >
+                    بستن
+                  </button>
+                </div>
               </>
             ) : readyToSubmit ? (
               <>
@@ -707,16 +720,26 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                     ? 'مدارک اصلاحی ثبت شدند و آماده ارسال مجدد به واحد صدور فاکتور هستند.'
                     : 'هر دو مدرک بارگذاری شدند و آماده ارسال به بخش صدور فاکتور هستند.'}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onCompleteDelivery(order.id)}
-                  className="w-full sm:w-auto min-h-[48px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 rounded-xl sm:rounded-md text-sm sm:text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99] shadow-sm transition-all whitespace-nowrap"
-                >
-                  <CheckCheck className="w-4 h-4" />
-                  {financeRejected
-                    ? 'ارسال مجدد مدارک و اتمام تحویل'
-                    : 'اتمام تحویل و ارسال به صدور فاکتور'}
-                </button>
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReturnToSales(order)}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                    برگشت سفارش به فروش
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onCompleteDelivery(order.id)}
+                    className="w-full sm:w-auto min-h-[48px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-5 py-3 sm:py-2.5 rounded-xl sm:rounded-md text-sm sm:text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.99] shadow-sm transition-all whitespace-nowrap"
+                  >
+                    <CheckCheck className="w-4 h-4" />
+                    {financeRejected
+                      ? 'ارسال مجدد مدارک و اتمام تحویل'
+                      : 'اتمام تحویل و ارسال به صدور فاکتور'}
+                  </button>
+                </div>
               </>
             ) : (
               <>
@@ -729,13 +752,23 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                         ? 'عکس رسید پرداخت ثبت شد — لطفاً عکس فاکتور را نیز ثبت کنید.'
                         : 'عکس فاکتور ثبت شد — لطفاً عکس رسید پرداخت را نیز ثبت کنید.'}
                 </span>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
-                >
-                  بستن
-                </button>
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReturnToSales(order)}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                    برگشت سفارش به فروش
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-600 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  >
+                    بستن
+                  </button>
+                </div>
               </>
             )}
           </div>

@@ -1,4 +1,5 @@
 export type Department =
+  | 'sales'
   | 'production'
   | 'finance'
   | 'shipping'
@@ -10,7 +11,12 @@ export type Department =
 
 export type WorkflowDepartment = 'production' | 'finance' | 'shipping';
 
+export type NotificationDepartment = 'sales' | WorkflowDepartment;
+
+export type ReturnToSalesSource = 'production' | 'finance' | 'shipping' | 'driver';
+
 export type OrderStatus =
+  | 'returned_to_sales'
   | 'in_production'
   | 'pending_finance_approval'
   | 'finance_discrepancy_review'
@@ -33,6 +39,12 @@ export interface OrderItem {
 
 export interface RejectionRecord {
   source: WorkflowDepartment;
+  reason: string;
+  timestamp: string;
+}
+
+export interface SalesReturnRecord {
+  source: ReturnToSalesSource;
   reason: string;
   timestamp: string;
 }
@@ -109,12 +121,30 @@ export interface Order {
   customerLocation?: CustomerLocation;
   driverDelivery?: DriverDeliveryRecord;
   rejection?: RejectionRecord;
+  salesReturn?: SalesReturnRecord;
   discrepancy?: DiscrepancyRecord;
   returnRecord?: ReturnRecord;
   deliveryDate: string; // e.g. "1405-09-01"
   seenByDept: Record<WorkflowDepartment, boolean>;
   createdAt: string;
   lastActionAt: number;
+}
+
+export interface CreateOrderItemInput {
+  productName: string;
+  requestedWeight: number;
+  unitPrice: number;
+}
+
+export interface CreateOrderInput {
+  customerName: string;
+  customerPhone: string;
+  district: string;
+  address: string;
+  deliveryDate: string;
+  deliverySlot: string;
+  notes: string;
+  items: CreateOrderItemInput[];
 }
 
 export interface Driver {

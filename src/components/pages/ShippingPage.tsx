@@ -10,7 +10,10 @@ import {
   Truck,
   Zap,
 } from 'lucide-react';
-import { DEPARTMENT_LABELS } from '../../data/initialOrders';
+import {
+  ALL_DEPARTMENT_LABELS,
+  DEPARTMENT_LABELS,
+} from '../../data/initialOrders';
 import { Order } from '../../types/order';
 import { AccessControlHelpers } from '../../types/permissions';
 import { formatWeight, getShippingWeight } from '../../utils/formatters';
@@ -66,6 +69,15 @@ function getShippingStatusDisplay(order: Order): {
   label: string;
   className: string;
 } {
+  if (order.status === 'returned_to_sales') {
+    const src = order.salesReturn
+      ? ALL_DEPARTMENT_LABELS[order.salesReturn.source]
+      : '';
+    return {
+      label: src ? `برگشت‌خورده به فروش (${src})` : 'برگشت‌خورده به فروش',
+      className: 'text-amber-800',
+    };
+  }
   if (order.status === 'rejected') {
     const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
     return { label: `رد شده (${src})`, className: 'text-red-700' };
@@ -239,17 +251,20 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
             const showOtherDivider =
               priorityCount > 0 && index === priorityCount;
 
+            const returnedToSales = order.status === 'returned_to_sales';
             const cardStyle = pendingReturnConfirm
               ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
-              : rejected || returned
-                ? 'border border-red-300 bg-red-50/20'
-                : readyToShip
-                  ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
-                  : delivered
-                    ? 'border border-emerald-400 bg-emerald-50/20'
-                    : discrepancyReview
-                      ? 'border border-amber-400 bg-amber-50/20'
-                      : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
+              : returnedToSales
+                ? 'border border-amber-400 bg-amber-50/30'
+                : rejected || returned
+                  ? 'border border-red-300 bg-red-50/20'
+                  : readyToShip
+                    ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
+                    : delivered
+                      ? 'border border-emerald-400 bg-emerald-50/20'
+                      : discrepancyReview
+                        ? 'border border-amber-400 bg-amber-50/20'
+                        : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
             return (
               <React.Fragment key={order.id}>

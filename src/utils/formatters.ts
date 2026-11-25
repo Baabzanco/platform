@@ -46,6 +46,8 @@ export function formatDuration(seconds: number): string {
 
 export function getStatusLabel(status: OrderStatus): string {
   switch (status) {
+    case 'returned_to_sales':
+      return 'برگشت‌خورده به فروش';
     case 'in_production':
       return 'در حال تولید و توزین';
     case 'pending_finance_approval':

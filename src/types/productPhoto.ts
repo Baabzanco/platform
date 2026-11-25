@@ -7,3 +7,16 @@ export interface ProductPhoto {
   uploadedAt: string;
   fileSizeKb?: number;
 }
+
+export interface TrainingVideo {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string;
+  fileName: string;
+  mimeType: string;
+  fileSizeMb: number;
+  durationSeconds?: number;
+  uploadedBy: string;
+  uploadedAt: string;
+}

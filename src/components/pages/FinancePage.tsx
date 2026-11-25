@@ -9,7 +9,10 @@ import {
   Search,
   Zap,
 } from 'lucide-react';
-import { DEPARTMENT_LABELS } from '../../data/initialOrders';
+import {
+  ALL_DEPARTMENT_LABELS,
+  DEPARTMENT_LABELS,
+} from '../../data/initialOrders';
 import { Order } from '../../types/order';
 import { AccessControlHelpers } from '../../types/permissions';
 import {
@@ -141,6 +144,15 @@ export const FinancePage: React.FC<FinancePageProps> = ({
   const getFinanceStatusDisplay = (
     order: Order
   ): { text: string; className: string } => {
+    if (order.status === 'returned_to_sales') {
+      const src = order.salesReturn
+        ? ALL_DEPARTMENT_LABELS[order.salesReturn.source]
+        : '';
+      return {
+        text: src ? `برگشت‌خورده به فروش (${src})` : 'برگشت‌خورده به فروش',
+        className: 'text-amber-800',
+      };
+    }
     if (order.status === 'rejected') {
       const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
       return { text: `رد شده (${src})`, className: 'text-red-700' };
@@ -285,21 +297,24 @@ export const FinancePage: React.FC<FinancePageProps> = ({
             const showOtherDivider =
               priorityCount > 0 && index === priorityCount;
 
+            const returnedToSales = order.status === 'returned_to_sales';
             const cardStyle = pendingReturnConfirm
               ? 'border-2 border-red-500 bg-white shadow-md ring-2 ring-red-500/20'
               : pendingDriverDocs
                 ? 'border-2 border-emerald-600 bg-white shadow-md ring-2 ring-emerald-500/20'
                 : rejectedDriverDocs
                   ? 'border border-red-400 bg-red-50/25'
-                  : rejected || returned
-                    ? 'border border-red-300 bg-red-50/20'
-                    : discrepancy
-                      ? 'border-2 border-amber-500 bg-amber-50/20 shadow-md ring-2 ring-amber-500/20'
-                      : readyForApproval
-                        ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
-                        : approved
-                          ? 'border border-emerald-400 bg-emerald-50/20'
-                          : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
+                  : returnedToSales
+                    ? 'border border-amber-400 bg-amber-50/30'
+                    : rejected || returned
+                      ? 'border border-red-300 bg-red-50/20'
+                      : discrepancy
+                        ? 'border-2 border-amber-500 bg-amber-50/20 shadow-md ring-2 ring-amber-500/20'
+                        : readyForApproval
+                          ? 'border-2 border-[#0f5864] bg-white shadow-md ring-2 ring-[#0f5864]/15'
+                          : approved
+                            ? 'border border-emerald-400 bg-emerald-50/20'
+                            : 'border border-[#7a9cbf] bg-white hover:border-[#0f5864]';
 
             return (
               <React.Fragment key={order.id}>

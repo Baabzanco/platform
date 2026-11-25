@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import {
   Factory,
+  FilePlus2,
   FileSpreadsheet,
-  Images,
+  MonitorPlay,
   MoreHorizontal,
   Navigation,
   PieChart,
@@ -13,12 +14,12 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { Department, WorkflowDepartment } from '../types/order';
+import { Department, NotificationDepartment } from '../types/order';
 
 interface SidebarProps {
   activePage: Department;
   onSelectPage: (page: Department) => void;
-  unreadCounts: Record<WorkflowDepartment, number>;
+  unreadCounts: Record<NotificationDepartment, number>;
   rejectedDriverDocsCount: number;
   onRequestReset: () => void;
 }
@@ -28,9 +29,16 @@ const NAV_ITEMS: Array<{
   label: string;
   shortLabel: string;
   icon: React.FC<{ className?: string }>;
-  badgeKey?: WorkflowDepartment;
+  badgeKey?: NotificationDepartment;
   isDriver?: boolean;
 }> = [
+  {
+    id: 'sales',
+    label: 'بخش کارشناس فروش',
+    shortLabel: 'فروش',
+    icon: FilePlus2,
+    badgeKey: 'sales',
+  },
   {
     id: 'production',
     label: 'بخش تولید',
@@ -79,17 +87,17 @@ const NAV_ITEMS: Array<{
   },
   {
     id: 'product_photos',
-    label: 'عکس محصولات',
-    shortLabel: 'عکس محصولات',
-    icon: Images,
+    label: 'مدیا آموزشی',
+    shortLabel: 'مدیا آموزشی',
+    icon: MonitorPlay,
   },
 ];
 
 const MOBILE_PRIMARY_TABS: Department[] = [
+  'sales',
   'production',
   'finance',
   'shipping',
-  'driver',
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -108,6 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const isMoreActive =
+    activePage === 'driver' ||
     activePage === 'reports' ||
     activePage === 'access' ||
     activePage === 'customers' ||
@@ -244,11 +253,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             }`}
           >
             <span
-              className={`flex items-center justify-center w-9 h-7 rounded-lg transition-colors ${
+              className={`relative flex items-center justify-center w-9 h-7 rounded-lg transition-colors ${
                 isMoreActive || moreOpen ? 'bg-[#0f5864]/12' : ''
               }`}
             >
               <MoreHorizontal className="w-[21px] h-[21px]" />
+              {rejectedDriverDocsCount > 0 && (
+                <span className="tabular-nums absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center border border-white">
+                  {rejectedDriverDocsCount}
+                </span>
+              )}
             </span>
             <span className="text-[11px] mt-0.5 leading-tight whitespace-nowrap">
               بیشتر
@@ -294,6 +308,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="p-3 space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onSelectPage('driver');
+                }}
+                className={`w-full min-h-[48px] px-4 rounded-xl flex items-center justify-between gap-3 text-sm font-semibold transition-colors ${
+                  activePage === 'driver'
+                    ? 'bg-[#0f5864]/10 text-[#0f5864]'
+                    : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Navigation className="w-5 h-5 shrink-0" />
+                  <span>پنل رانندگان</span>
+                </span>
+                {rejectedDriverDocsCount > 0 && (
+                  <span className="tabular-nums min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center">
+                    {rejectedDriverDocsCount}
+                  </span>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => {
@@ -354,8 +391,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-slate-800 hover:bg-slate-50'
                 }`}
               >
-                <Images className="w-5 h-5 shrink-0" />
-                <span>عکس محصولات</span>
+                <MonitorPlay className="w-5 h-5 shrink-0" />
+                <span>مدیا آموزشی</span>
               </button>
 
               <div className="my-2 border-t border-slate-100" />

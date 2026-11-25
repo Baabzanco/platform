@@ -28,6 +28,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
               'نوار هفتگی بالای صفحه، شمارشگر سفارش‌ها و تغییر روز/هفته',
           },
           {
+            key: 'section_sales',
+            label: 'صفحه بخش کارشناس فروش',
+            description:
+              'مشاهده فهرست سفارشات با تمام جزئیات، ثبت فاکتور جدید و رسیدگی به سفارش‌های برگشت‌خورده به فروش',
+          },
+          {
             key: 'section_production',
             label: 'صفحه بخش تولید',
             description: 'مشاهده صف سفارش‌های تولید و مدیریت عملیات توزین',
@@ -184,10 +190,23 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
         ],
       },
       {
-        id: 'production_actions',
-        title: 'عملیات بخش تولید',
-        description: 'دکمه‌ها و اقدامات اجرایی مرحله تولید و توزین',
+        id: 'sales_and_production_actions',
+        title: 'عملیات فروش و بخش تولید',
+        description:
+          'ثبت فاکتور جدید، برگشت سفارش به فروش در تمامی مراحل و عملیات توزین تولید',
         items: [
+          {
+            key: 'action_sales_create_order',
+            label: 'ثبت فاکتور جدید و ارسال به تولید',
+            description:
+              'ایجاد سفارش و فاکتور جدید توسط کارشناس فروش و ارسال مستقیم آن به صف تولید',
+          },
+          {
+            key: 'action_return_to_sales',
+            label: 'برگشت سفارش به فروش (در تمامی مراحل)',
+            description:
+              'امکان بازگرداندن سفارش از مراحل تولید، صدور فاکتور، ارسال و پنل رانندگان به کارشناس فروش',
+          },
           {
             key: 'action_production_weigh',
             label: 'ثبت و ویرایش وزن محصول',
@@ -406,21 +425,21 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
   },
   {
     id: 'product_photos',
-    title: 'عکس محصولات',
+    title: 'مدیا آموزشی',
     description:
-      'کنترل دسترسی کاربران به صفحه گالری عکس محصولات، جستجو بر اساس تایتل، امکان آپلود تصاویر جدید و ویرایش یا حذف عکس‌ها.',
+      'مدیریت دسترسی کاربران به صفحه مدیا آموزشی شامل دو تب عکس محصولات (جستجوی تایتل و آپلود عکس) و ویدیوهای آموزشی (پخش، آپلود ویدیو با تایتل و توضیحات).',
     subgroups: [
       {
         id: 'product_photos_management',
-        title: 'گالری و آپلود عکس محصولات',
+        title: 'تب عکس محصولات',
         description:
-          'تعیین مجوز مشاهده، آپلود عکس جدید و مدیریت تایتل یا حذف تصاویر در صفحه عکس محصولات',
+          'تعیین مجوز مشاهده، آپلود عکس جدید و مدیریت تایتل یا حذف تصاویر در تب عکس محصولات',
         items: [
           {
             key: 'section_product_photos',
-            label: 'مشاهده صفحه عکس محصولات و جستجوی تایتل',
+            label: 'مشاهده تب عکس محصولات و جستجوی تایتل',
             description:
-              'دسترسی به صفحه عکس محصولات، جستجو بر اساس تایتل و مشاهده بزرگ‌نمایی تصاویر',
+              'دسترسی به تب عکس محصولات، جستجو بر اساس تایتل و مشاهده بزرگ‌نمایی تصاویر',
           },
           {
             key: 'action_product_photos_upload',
@@ -432,7 +451,33 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             key: 'action_product_photos_manage',
             label: 'ویرایش تایتل و حذف عکس محصولات',
             description:
-              'امکان تغییر عنوان تصاویر ثبت‌شده یا حذف عکس از گالری محصولات',
+              'امکان تغییر عنوان تصاویر ثبت‌شده یا حذف عکس از گالری عکس محصولات',
+          },
+        ],
+      },
+      {
+        id: 'training_videos_management',
+        title: 'تب ویدیوهای آموزشی',
+        description:
+          'تعیین مجوز مشاهده، آپلود ویدیو آموزشی همراه با تایتل و توضیحات، و مدیریت ویدیوها',
+        items: [
+          {
+            key: 'section_training_videos',
+            label: 'مشاهده و پخش ویدیوهای آموزشی',
+            description:
+              'دسترسی به تب ویدیوهای آموزشی، جستجو در تایتل و توضیحات و پخش ویدیوها',
+          },
+          {
+            key: 'action_training_videos_upload',
+            label: 'آپلود ویدیوی آموزشی',
+            description:
+              'دسترسی آپلود فایل ویدیوی آموزشی همراه با ثبت تایتل و توضیحات کامل',
+          },
+          {
+            key: 'action_training_videos_manage',
+            label: 'ویرایش و حذف ویدیوی آموزشی',
+            description:
+              'امکان ویرایش تایتل و توضیحات یا حذف ویدیوهای ثبت‌شده در تب ویدیوهای آموزشی',
           },
         ],
       },
@@ -482,9 +527,52 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
         action_reset_data: { view: false, edit: false },
         action_product_photos_upload: { view: false, edit: false },
         action_product_photos_manage: { view: false, edit: false },
+        action_training_videos_upload: { view: false, edit: false },
+        action_training_videos_manage: { view: false, edit: false },
       },
       { view: true, edit: false }
     );
+  }
+
+  if (preset === 'sales_specialist') {
+    return createPermissionMap({
+      // Orders & Sales
+      section_calendar: { view: true, edit: true },
+      section_sales: { view: true, edit: true },
+      field_order_code: { view: true, edit: false },
+      field_delivery_slot: { view: true, edit: true },
+      field_order_status: { view: true, edit: false },
+      field_customer_name: { view: true, edit: true },
+      field_customer_phone: { view: true, edit: true },
+      field_district: { view: true, edit: true },
+      field_address: { view: true, edit: true },
+      field_notes: { view: true, edit: true },
+      field_call_recording: { view: true, edit: false },
+      field_product_name: { view: true, edit: true },
+      field_requested_weight: { view: true, edit: true },
+      field_produced_weight: { view: true, edit: false },
+      field_revised_weight: { view: true, edit: false },
+      field_delivered_weight: { view: true, edit: false },
+      field_returned_weight: { view: true, edit: false },
+      field_unit_price: { view: true, edit: true },
+      field_item_total: { view: true, edit: false },
+      field_order_total: { view: true, edit: false },
+      field_driver_assignment: { view: true, edit: false },
+      action_sales_create_order: { view: true, edit: true },
+      action_print: { view: true, edit: true },
+      // Customers
+      section_customers_list: { view: true, edit: true },
+      action_customer_create: { view: true, edit: true },
+      action_customer_send_sms: { view: true, edit: true },
+      section_customer_profile: { view: true, edit: true },
+      field_customer_financial_standing: { view: true, edit: false },
+      section_customer_accounting: { view: true, edit: false },
+      section_customer_contacts: { view: true, edit: true },
+      section_customer_events_chat: { view: true, edit: true },
+      // Training Media (view only)
+      section_product_photos: { view: true, edit: false },
+      section_training_videos: { view: true, edit: false },
+    });
   }
 
   if (preset === 'production_operator') {
@@ -501,15 +589,19 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
       field_requested_weight: { view: true, edit: false },
       field_produced_weight: { view: true, edit: true },
       field_returned_weight: { view: true, edit: false },
+      action_return_to_sales: { view: true, edit: true },
       action_production_weigh: { view: true, edit: true },
       action_production_complete: { view: true, edit: true },
       action_production_reject: { view: true, edit: true },
       action_return_confirm: { view: true, edit: true },
       action_print: { view: true, edit: true },
-      // Product Photos (production can view & upload product photos)
+      // Training Media (production can view & upload product photos and training videos)
       section_product_photos: { view: true, edit: false },
       action_product_photos_upload: { view: true, edit: true },
       action_product_photos_manage: { view: true, edit: false },
+      section_training_videos: { view: true, edit: false },
+      action_training_videos_upload: { view: true, edit: true },
+      action_training_videos_manage: { view: true, edit: false },
     });
   }
 
@@ -534,6 +626,7 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
       field_item_total: { view: true, edit: false },
       field_order_total: { view: true, edit: false },
       field_driver_assignment: { view: true, edit: false },
+      action_return_to_sales: { view: true, edit: true },
       action_finance_approve: { view: true, edit: true },
       action_finance_reject: { view: true, edit: true },
       action_finance_verify_driver_docs: { view: true, edit: true },
@@ -549,8 +642,9 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
       section_customer_accounting: { view: true, edit: false },
       section_customer_contacts: { view: true, edit: true },
       section_customer_events_chat: { view: true, edit: true },
-      // Product Photos (view only)
+      // Training Media (view only)
       section_product_photos: { view: true, edit: false },
+      section_training_videos: { view: true, edit: false },
     });
   }
 
@@ -572,6 +666,7 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
       field_delivered_weight: { view: true, edit: true },
       field_returned_weight: { view: true, edit: true },
       field_driver_assignment: { view: true, edit: true },
+      action_return_to_sales: { view: true, edit: true },
       action_shipping_discrepancy: { view: true, edit: true },
       action_shipping_deliver: { view: true, edit: true },
       action_shipping_return: { view: true, edit: true },
@@ -581,8 +676,9 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
       // Customers (basic view)
       section_customers_list: { view: true, edit: false },
       section_customer_contacts: { view: true, edit: false },
-      // Product Photos (view only)
+      // Training Media (view only)
       section_product_photos: { view: true, edit: false },
+      section_training_videos: { view: true, edit: false },
     });
   }
 
@@ -599,17 +695,20 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
     field_product_name: { view: true, edit: false },
     field_delivered_weight: { view: true, edit: false },
     field_driver_assignment: { view: true, edit: false },
+    action_return_to_sales: { view: true, edit: true },
     action_driver_route_priority: { view: true, edit: true },
     field_driver_invoice_photo: { view: true, edit: true },
     field_driver_receipt_photo: { view: true, edit: true },
     action_driver_complete: { view: true, edit: true },
     action_print: { view: true, edit: true },
     section_product_photos: { view: true, edit: false },
+    section_training_videos: { view: true, edit: false },
   });
 }
 
 export const ACCESS_PRESET_LABELS: Record<AccessPresetId, string> = {
   admin_full: 'دسترسی کامل (مدیران سیستم)',
+  sales_specialist: 'الگوی گروه کارشناسان فروش',
   production_operator: 'الگوی گروه تولید',
   finance_specialist: 'الگوی گروه صدور فاکتور',
   shipping_coordinator: 'الگوی گروه ارسال',
@@ -622,43 +721,50 @@ export const INITIAL_USER_GROUPS: UserGroup[] = [
     id: 'group-admins',
     name: 'مدیران کل سیستم',
     description:
-      'دسترسی کامل مشاهده و ویرایش به تمام بخش‌های سفارشات، لیست طرف حساب‌ها و عکس محصولات',
+      'دسترسی کامل مشاهده و ویرایش به تمام بخش‌های سفارشات، لیست طرف حساب‌ها و مدیا آموزشی',
     isSystemGroup: true,
     permissions: buildPresetPermissions('admin_full'),
+  },
+  {
+    id: 'group-sales',
+    name: 'گروه کارشناسان فروش',
+    description:
+      'دسترسی به صفحه کارشناس فروش، مشاهده کامل جزئیات سفارشات، ثبت فاکتور جدید و پیگیری مشتریان',
+    permissions: buildPresetPermissions('sales_specialist'),
   },
   {
     id: 'group-production',
     name: 'گروه تولید و توزین',
     description:
-      'دسترسی به صف تولید، ماتریس نیاز به آماده‌سازی، ثبت وزن و آپلود عکس محصولات',
+      'دسترسی به صف تولید، ماتریس نیاز به آماده‌سازی، ثبت وزن و آپلود عکس و ویدیو در مدیا آموزشی',
     permissions: buildPresetPermissions('production_operator'),
   },
   {
     id: 'group-finance',
     name: 'گروه صدور فاکتور',
     description:
-      'دسترسی به صدور فاکتور، لیست طرف حساب‌ها، وضعیت مالی، رخداد حسابداری و مشاهده عکس محصولات',
+      'دسترسی به صدور فاکتور، لیست طرف حساب‌ها، وضعیت مالی، رخداد حسابداری و مشاهده مدیا آموزشی',
     permissions: buildPresetPermissions('finance_specialist'),
   },
   {
     id: 'group-shipping',
     name: 'گروه ارسال و توزیع',
     description:
-      'دسترسی به تخصیص راننده، ثبت مغایرت وزن، تحویل بار، مرجوعی و مشاهده اطلاعات تماس مشتریان',
+      'دسترسی به تخصیص راننده، ثبت مغایرت وزن، تحویل بار، مرجوعی و مشاهده مدیا آموزشی',
     permissions: buildPresetPermissions('shipping_coordinator'),
   },
   {
     id: 'group-drivers',
     name: 'گروه رانندگان پخش',
     description:
-      'دسترسی به پنل رانندگان، ثبت لوکیشن و مسیریابی، آپلود مدارک تحویل و مشاهده عکس محصولات',
+      'دسترسی به پنل رانندگان، ثبت لوکیشن و مسیریابی، آپلود مدارک تحویل و مشاهده مدیا آموزشی',
     permissions: buildPresetPermissions('driver_role'),
   },
   {
     id: 'group-viewers',
     name: 'گروه ناظرین (فقط مشاهده)',
     description:
-      'مشاهده سفارش‌ها، لیست طرف حساب‌ها و عکس محصولات بدون امکان ویرایش یا آپلود',
+      'مشاهده سفارش‌ها، لیست طرف حساب‌ها و مدیا آموزشی بدون امکان ویرایش یا آپلود',
     permissions: buildPresetPermissions('read_only_viewer'),
   },
 ];

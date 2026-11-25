@@ -19,13 +19,19 @@ import {
   Scale,
   Stamp,
   Truck,
+  Undo2,
   X,
   Zap,
 } from 'lucide-react';
-import { DEPARTMENT_LABELS, DRIVERS } from '../../data/initialOrders';
+import {
+  ALL_DEPARTMENT_LABELS,
+  DEPARTMENT_LABELS,
+  DRIVERS,
+} from '../../data/initialOrders';
 import {
   Order,
   OrderItem,
+  ReturnToSalesSource,
   UploadedDocumentPhoto,
   WorkflowDepartment,
 } from '../../types/order';
@@ -37,13 +43,14 @@ import {
   formatWeight,
   getFinanceWeight,
   getShippingWeight,
+  getStatusLabel,
 } from '../../utils/formatters';
 import { AudioRecordingPlayer } from '../AudioRecordingPlayer';
 import { ReturnResolutionBox } from '../ReturnResolutionBox';
 
 interface OrderDetailModalProps {
   order: Order | null;
-  department: WorkflowDepartment;
+  department: 'sales' | WorkflowDepartment;
   access: AccessControlHelpers;
   disableEscape?: boolean;
   onClose: () => void;
@@ -65,6 +72,8 @@ interface OrderDetailModalProps {
   // Shared actions
   onOpenReject: (order: Order, source: WorkflowDepartment) => void;
   onConfirmReturn: (orderId: string, dept: WorkflowDepartment) => void;
+  onOpenReturnToSales: (order: Order, source: ReturnToSalesSource) => void;
+  onEditReturnedOrder?: (order: Order) => void;
 }
 
 export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
@@ -87,6 +96,8 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onDriverMissingWarning,
   onOpenReject,
   onConfirmReturn,
+  onOpenReturnToSales,
+  onEditReturnedOrder,
 }) => {
   const [zoomedDoc, setZoomedDoc] = useState<{
     title: string;
@@ -114,6 +125,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
   if (!order) return null;
 
+  const returnedToSales = order.status === 'returned_to_sales';
   const rejected = order.status === 'rejected';
   const returned = order.status === 'returned';
   const inProduction = order.status === 'in_production';
@@ -138,7 +150,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   const netAfterReturn = Math.max(0, orderTotal - returnDeduction);
 
   const deptReturnPending =
-    returned && !(order.returnRecord?.confirmations[department]?.confirmed ?? false);
+    department !== 'sales' &&
+    returned &&
+    !(order.returnRecord?.confirmations[department]?.confirmed ?? false);
 
   const driverDocsRejectedPending = Boolean(
     order.driverDelivery?.financeRejected && !order.driverDelivery?.sentToFinance
@@ -153,6 +167,15 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   };
 
   const getFinanceStatusText = () => {
+    if (returnedToSales) {
+      const src = order.salesReturn
+        ? ALL_DEPARTMENT_LABELS[order.salesReturn.source]
+        : '';
+      return {
+        text: src ? `برگشت‌خورده به فروش (${src})` : 'برگشت‌خورده به فروش',
+        className: 'text-amber-800',
+      };
+    }
     if (rejected) {
       const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
       return { text: `رد شده (${src})`, className: 'text-red-700' };
@@ -201,6 +224,19 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
         </div>
 
         {/* Top Priority Banner inside Modal */}
+        {returnedToSales && (
+          <div className="px-4 sm:px-5 py-2.5 bg-amber-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
+            <span className="inline-flex items-center gap-2">
+              <Undo2 className="w-4 h-4 shrink-0" />
+              سفارش برگشت‌خورده به کارشناس فروش
+              {order.salesReturn
+                ? ` (از ${ALL_DEPARTMENT_LABELS[order.salesReturn.source]})`
+                : ''}
+            </span>
+            <span className="tabular-nums opacity-95">کد {order.code}</span>
+          </div>
+        )}
+
         {deptReturnPending && (
           <div className="px-4 sm:px-5 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
             <span className="inline-flex items-center gap-2">
@@ -282,7 +318,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </div>
             )}
 
-            {department === 'finance' && (
+            {(department === 'finance' || department === 'sales') && (
               <>
                 {access.canView('field_customer_name') && (
                   <div className="text-[13px] min-w-0">
@@ -296,7 +332,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   <div className="text-[13px] col-span-2 sm:col-span-1">
                     <span className="block text-[11px] text-slate-500 mb-0.5">وضعیت</span>
                     <span className={`font-bold text-xs sm:text-[13px] ${financeStatus.className}`}>
-                      {financeStatus.text}
+                      {department === 'sales' ? getStatusLabel(order.status) : financeStatus.text}
                     </span>
                   </div>
                 )}
@@ -340,6 +376,23 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
 
         {/* Scrollable Modal Body */}
         <div className="overflow-y-auto flex-1 divide-y divide-slate-200">
+          {/* Returned to Sales Alert */}
+          {returnedToSales && order.salesReturn && (
+            <div className="px-4 sm:px-5 py-3 bg-amber-50 text-amber-950 text-xs sm:text-[13px] flex items-start gap-2.5">
+              <Undo2 className="w-4 h-4 shrink-0 text-amber-700 mt-0.5" />
+              <div className="space-y-0.5 leading-relaxed">
+                <div>
+                  این سفارش توسط{' '}
+                  <strong>{ALL_DEPARTMENT_LABELS[order.salesReturn.source]}</strong>{' '}
+                  در زمان <span className="tabular-nums">{order.salesReturn.timestamp}</span> به بخش کارشناس فروش برگشت داده شده است.
+                </div>
+                <div>
+                  <strong>علت برگشت:</strong> {order.salesReturn.reason}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Rejection Alert */}
           {rejected && order.rejection && (
             <div className="px-4 sm:px-5 py-3 bg-red-100 text-red-900 text-xs sm:text-[13px] flex items-start gap-2">
@@ -351,15 +404,16 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             </div>
           )}
 
-          {/* Production Notes */}
-          {department === 'production' && access.canView('field_notes') && (
-            <div className="px-4 sm:px-5 py-3 bg-amber-50/90 text-amber-950 text-xs sm:text-[13px] leading-relaxed">
-              <strong>توضیحات تولید:</strong> {order.notes}
-            </div>
-          )}
+          {/* Production Notes (also shown in Sales full view) */}
+          {(department === 'production' || department === 'sales') &&
+            access.canView('field_notes') && (
+              <div className="px-4 sm:px-5 py-3 bg-amber-50/90 text-amber-950 text-xs sm:text-[13px] leading-relaxed">
+                <strong>توضیحات تولید و سفارش:</strong> {order.notes}
+              </div>
+            )}
 
-          {/* Finance Contact & Audio + Discrepancy Alert */}
-          {department === 'finance' && (
+          {/* Finance / Sales Contact & Audio + Discrepancy Alert */}
+          {(department === 'finance' || department === 'sales') && (
             <>
               {(access.canView('field_customer_phone') ||
                 access.canView('field_call_recording')) && (
@@ -377,11 +431,18 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                       </span>
                     </a>
                   )}
-                  {access.canView('field_call_recording') && (
-                    <AudioRecordingPlayer
-                      orderCode={order.code}
-                      durationSeconds={order.callDurationSeconds}
-                    />
+                  {access.canView('field_call_recording') &&
+                    order.callDurationSeconds > 0 && (
+                      <AudioRecordingPlayer
+                        orderCode={order.code}
+                        durationSeconds={order.callDurationSeconds}
+                      />
+                    )}
+                  {department === 'sales' && order.driverName && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                      <Truck className="w-3.5 h-3.5 shrink-0" />
+                      راننده: {order.driverName}
+                    </span>
                   )}
                 </div>
               )}
@@ -404,17 +465,18 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             </>
           )}
 
-          {/* Shipping Delivery Address */}
-          {department === 'shipping' && access.canView('field_address') && (
-            <div className="px-4 sm:px-5 py-3 bg-slate-50/70">
-              <div className="flex items-start gap-2 bg-white border border-dashed border-slate-300 rounded-xl px-3.5 py-3 text-xs sm:text-[13px] text-slate-700 leading-relaxed">
-                <MapPin className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                <span>
-                  <strong>آدرس تحویل ({order.district}):</strong> {order.address}
-                </span>
+          {/* Shipping & Sales Delivery Address */}
+          {(department === 'shipping' || department === 'sales') &&
+            access.canView('field_address') && (
+              <div className="px-4 sm:px-5 py-3 bg-slate-50/70">
+                <div className="flex items-start gap-2 bg-white border border-dashed border-slate-300 rounded-xl px-3.5 py-3 text-xs sm:text-[13px] text-slate-700 leading-relaxed">
+                  <MapPin className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>آدرس تحویل ({order.district}):</strong> {order.address}
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
           {/* Department-Specific Items (Mobile Stacked Cards + Desktop Table) */}
           <div className="bg-white">
@@ -542,8 +604,8 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </>
             )}
 
-            {/* FINANCE ITEMS */}
-            {department === 'finance' && (
+            {/* FINANCE & SALES FULL ITEMS */}
+            {(department === 'finance' || department === 'sales') && (
               <>
                 {/* Mobile Card List */}
                 <div className={`sm:hidden divide-y divide-slate-100 ${rejected ? 'opacity-60' : ''}`}>
@@ -757,8 +819,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
           </div>
 
-          {/* Driver-Submitted Delivery Photos in Invoice Issuance (Verify OR Reject with Reason) */}
-          {department === 'finance' && order.driverDelivery?.sentToFinance && (
+          {/* Driver-Submitted Delivery Photos in Invoice Issuance & Sales */}
+          {(department === 'finance' || department === 'sales') &&
+            order.driverDelivery?.sentToFinance && (
             <div className="px-4 sm:px-5 py-4 bg-emerald-50/50 space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -777,7 +840,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
                     تایید شده توسط صدور فاکتور ({order.driverDelivery.financeVerifiedAt})
                   </span>
-                ) : (
+                ) : department === 'finance' ? (
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <button
                       type="button"
@@ -796,6 +859,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                       تایید مدارک تحویل
                     </button>
                   </div>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-800 border border-amber-200 text-xs font-semibold">
+                    در انتظار بررسی بخش صدور فاکتور
+                  </span>
                 )}
               </div>
 
@@ -894,7 +961,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           )}
 
           {/* Return Resolution Box */}
-          {returned && order.returnRecord && (
+          {returned && order.returnRecord && department !== 'sales' && (
             <ReturnResolutionBox
               returnRecord={order.returnRecord}
               currentDept={department}
@@ -919,20 +986,97 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               }
             />
           )}
+
+          {returned && order.returnRecord && department === 'sales' && (
+            <div className="px-4 sm:px-5 py-4 bg-red-50/70 space-y-2 text-xs text-red-900">
+              <div className="font-bold inline-flex items-center gap-1.5 text-red-800">
+                <RotateCcw className="w-4 h-4 shrink-0" />
+                گزارش مرجوعی ثبت‌شده ({order.returnRecord.timestamp})
+              </div>
+              <p className="leading-relaxed">
+                <strong>توضیحات مرجوعی:</strong> {order.returnRecord.notes}
+              </p>
+              <div className="tabular-nums flex flex-wrap gap-x-4 gap-y-1 pt-1">
+                <span>
+                  مبلغ اولیه فاکتور: <strong>{formatRial(orderTotal)}</strong>
+                </span>
+                <span>
+                  کسر بابت مرجوعی:{' '}
+                  <strong className="text-red-700">{formatRial(returnDeduction)}</strong>
+                </span>
+                <span>
+                  مانده خالص:{' '}
+                  <strong className="text-[#0f5864]">{formatRial(netAfterReturn)}</strong>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Sticky Modal Action Footer (Thumb-Friendly Full-Width CTAs on Mobile) */}
-        {department === 'production' && !returned && (
+        {/* Sticky Modal Action Footer */}
+        {/* SALES FOOTER */}
+        {department === 'sales' && (
           <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
-            <span className="text-xs text-slate-600 leading-snug">
-              {inProduction && !allItemsWeighed
-                ? `لطفاً وزن تمام اقلام را ثبت کنید (${weighedCount} از ${order.items.length}).`
-                : allItemsWeighed
-                  ? 'تمامی اقلام توزین شده‌اند؛ آماده ارسال به صدور فاکتور.'
-                  : ''}
-            </span>
+            <div className="text-xs text-slate-600">
+              وضعیت فعلی:{' '}
+              <strong className="text-slate-900">{getStatusLabel(order.status)}</strong>
+              {' · '}
+              جمع فاکتور:{' '}
+              <strong className="tabular-nums text-[#0f5864]">
+                {formatRial(returned ? netAfterReturn : orderTotal)}
+              </strong>
+            </div>
 
             <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="min-h-[44px] sm:min-h-0 px-4 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-md hover:bg-slate-100 transition-colors whitespace-nowrap"
+              >
+                بستن
+              </button>
+              {returnedToSales && onEditReturnedOrder && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onEditReturnedOrder(order);
+                  }}
+                  className="min-h-[46px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-[#0f5864] text-white hover:bg-[#0b434d] transition-colors whitespace-nowrap"
+                >
+                  <Edit3 className="w-4 h-4 shrink-0" />
+                  اصلاح فاکتور و ارسال مجدد به تولید
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PRODUCTION FOOTER */}
+        {department === 'production' && (
+          <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
+            <span className="text-xs text-slate-600 leading-snug">
+              {returnedToSales
+                ? 'این سفارش به بخش کارشناس فروش برگشت داده شده است و در انتظار اصلاح و ارسال مجدد می‌باشد.'
+                : inProduction && !allItemsWeighed
+                  ? `لطفاً وزن تمام اقلام را ثبت کنید (${weighedCount} از ${order.items.length}).`
+                  : allItemsWeighed
+                    ? 'تمامی اقلام توزین شده‌اند؛ آماده ارسال به صدور فاکتور.'
+                    : ''}
+            </span>
+
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 flex-wrap justify-end">
+              {!returnedToSales && (
+                <button
+                  type="button"
+                  onClick={() => onOpenReturnToSales(order, 'production')}
+                  className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 rounded-xl sm:rounded-md hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                >
+                  <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                  برگشت سفارش به فروش
+                </button>
+              )}
+
               {inProduction && !allItemsWeighed && (
                 <button
                   type="button"
@@ -972,16 +1116,35 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           </div>
         )}
 
-        {department === 'finance' && !returned && (
+        {/* FINANCE FOOTER */}
+        {department === 'finance' && (
           <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
             <div className="text-xs text-slate-600">
               جمع قابل پرداخت:{' '}
               <strong className="tabular-nums text-sm text-slate-900">
-                {formatRial(orderTotal)}
+                {formatRial(returned ? netAfterReturn : orderTotal)}
               </strong>
             </div>
 
-            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 flex-wrap justify-end">
+              {!returnedToSales && (
+                <button
+                  type="button"
+                  onClick={() => onOpenReturnToSales(order, 'finance')}
+                  className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                >
+                  <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                  برگشت سفارش به فروش
+                </button>
+              )}
+
+              {returnedToSales && (
+                <span className="inline-flex items-center justify-center gap-1.5 bg-amber-50 text-amber-900 border border-amber-300 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold">
+                  <Undo2 className="w-4 h-4 shrink-0" />
+                  در انتظار اصلاح در بخش فروش
+                </span>
+              )}
+
               {financeApproved && (
                 <span className="inline-flex items-center justify-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold">
                   <CheckCircle2 className="w-4 h-4" />
@@ -997,7 +1160,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 </span>
               )}
 
-              {!financeApproved && !rejected && (
+              {!financeApproved && !rejected && !returned && !returnedToSales && (
                 <>
                   <button
                     type="button"
@@ -1032,41 +1195,75 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
           </div>
         )}
 
+        {/* SHIPPING FOOTER */}
         {department === 'shipping' && (
           <>
-            {rejected && (
-              <div className="px-4 sm:px-5 py-3.5 bg-red-50 text-red-800 border-t border-red-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-modal-safe shrink-0">
-                <Ban className="w-4 h-4 shrink-0" />
+            {returnedToSales && (
+              <div className="px-4 sm:px-5 py-3.5 bg-amber-50 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-modal-safe shrink-0">
+                <Undo2 className="w-4 h-4 shrink-0" />
                 <span>
-                  این سفارش توسط{' '}
-                  {order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : 'واحد مربوطه'}{' '}
-                  رد شده و ارسال آن لغو گردید.
+                  این سفارش به بخش کارشناس فروش برگشت داده شده و تا زمان اصلاح و ارسال مجدد در صف ارسال متوقف است.
                 </span>
               </div>
             )}
 
+            {rejected && (
+              <div className="px-4 sm:px-5 py-3.5 bg-red-50 text-red-800 border-t border-red-200 text-xs sm:text-[13px] font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-modal-safe shrink-0">
+                <span className="inline-flex items-center gap-2">
+                  <Ban className="w-4 h-4 shrink-0" />
+                  این سفارش توسط{' '}
+                  {order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : 'واحد مربوطه'}{' '}
+                  رد شده و ارسال آن لغو گردید.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenReturnToSales(order, 'shipping')}
+                  className="min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                >
+                  <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                  برگشت سفارش به فروش
+                </button>
+              </div>
+            )}
+
             {discrepancy && (
-              <div className="px-4 sm:px-5 py-3.5 bg-amber-50 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-bold flex items-center gap-2 pb-modal-safe shrink-0">
-                <Clock className="w-4 h-4 shrink-0" />
-                <span>
+              <div className="px-4 sm:px-5 py-3.5 bg-amber-50 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-modal-safe shrink-0">
+                <span className="inline-flex items-center gap-2">
+                  <Clock className="w-4 h-4 shrink-0" />
                   مغایرت وزن ثبت شد و سفارش جهت تایید مجدد به واحد صدور فاکتور ارجاع گردید.
                 </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenReturnToSales(order, 'shipping')}
+                  className="min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-white text-amber-900 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                >
+                  <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                  برگشت سفارش به فروش
+                </button>
               </div>
             )}
 
             {(order.status === 'in_production' ||
               order.status === 'pending_finance_approval') && (
-              <div className="px-4 sm:px-5 py-3.5 bg-amber-50/90 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-semibold flex items-center gap-2 pb-modal-safe shrink-0">
-                <Lock className="w-4 h-4 shrink-0" />
-                <span>
+              <div className="px-4 sm:px-5 py-3.5 bg-amber-50/90 text-amber-900 border-t border-amber-200 text-xs sm:text-[13px] font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-modal-safe shrink-0">
+                <span className="inline-flex items-center gap-2">
+                  <Lock className="w-4 h-4 shrink-0" />
                   این سفارش در انتظار تایید نهایی توسط واحد صدور فاکتور است. پس از تایید، امکان تخصیص راننده فراهم می‌شود.
                 </span>
+                <button
+                  type="button"
+                  onClick={() => onOpenReturnToSales(order, 'shipping')}
+                  className="min-h-[40px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-white text-amber-900 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap shrink-0"
+                >
+                  <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                  برگشت سفارش به فروش
+                </button>
               </div>
             )}
 
             {readyToShip && (
-              <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-modal-safe shrink-0">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5 flex-1">
+              <div className="px-4 sm:px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex flex-col gap-3 pb-modal-safe shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2.5">
                   <label
                     htmlFor={`modal-driver-${order.id}`}
                     className="text-xs font-bold text-slate-700 whitespace-nowrap"
@@ -1088,7 +1285,16 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   </select>
                 </div>
 
-                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReturnToSales(order, 'shipping')}
+                    className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                    برگشت سفارش به فروش
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => onOpenDiscrepancy(order)}
@@ -1118,24 +1324,35 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   {order.driverName ? ` (راننده: ${order.driverName})` : ''}
                 </span>
 
-                <button
-                  type="button"
-                  disabled={returned}
-                  onClick={() => onOpenReturn(order)}
-                  className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-white text-red-600 border border-red-500 hover:bg-red-600 hover:text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                >
-                  {returned ? (
-                    <>
-                      <Check className="w-3.5 h-3.5" />
-                      مرجوعی ثبت شد
-                    </>
-                  ) : (
-                    <>
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      مرجوع کردن سفارش
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReturnToSales(order, 'shipping')}
+                    className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-900 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                    برگشت سفارش به فروش
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={returned}
+                    onClick={() => onOpenReturn(order)}
+                    className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-white text-red-600 border border-red-500 hover:bg-red-600 hover:text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                  >
+                    {returned ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        مرجوعی ثبت شد
+                      </>
+                    ) : (
+                      <>
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        مرجوع کردن سفارش
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             )}
           </>

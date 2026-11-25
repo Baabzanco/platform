@@ -11,6 +11,7 @@ import {
   Phone,
   Printer,
   Search,
+  Undo2,
 } from 'lucide-react';
 import { DRIVERS } from '../../data/initialOrders';
 import { Order } from '../../types/order';
@@ -31,6 +32,7 @@ interface DriverPageProps {
   onSelectOrder: (orderId: string) => void;
   onOpenLocationModal: (order: Order, mode: LocationModalMode) => void;
   onCallCustomer: (order: Order) => void;
+  onOpenReturnToSales: (order: Order) => void;
 }
 
 type DriverFilter =
@@ -60,6 +62,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
   onSelectOrder,
   onOpenLocationModal,
   onCallCustomer,
+  onOpenReturnToSales,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<DriverFilter>('all');
@@ -567,6 +570,16 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                         : completed
                           ? 'مشاهده مدارک'
                           : 'عکس فاکتور و رسید'}
+                    </button>
+
+                    {/* Return Order to Sales */}
+                    <button
+                      type="button"
+                      onClick={() => onOpenReturnToSales(order)}
+                      className="col-span-2 sm:col-span-1 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
+                    >
+                      <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                      برگشت سفارش به فروش
                     </button>
                   </div>
 

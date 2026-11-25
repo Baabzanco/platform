@@ -18,9 +18,10 @@ interface ReportsPageProps {
 }
 
 const STAGE_ORDER: Array<{ status: OrderStatus; color: string }> = [
+  { status: 'returned_to_sales', color: 'bg-amber-600' },
   { status: 'in_production', color: 'bg-sky-500' },
   { status: 'pending_finance_approval', color: 'bg-indigo-500' },
-  { status: 'finance_discrepancy_review', color: 'bg-amber-500' },
+  { status: 'finance_discrepancy_review', color: 'bg-amber-400' },
   { status: 'pending_shipping', color: 'bg-[#0f5864]' },
   { status: 'delivered', color: 'bg-emerald-600' },
   { status: 'returned', color: 'bg-orange-600' },
@@ -43,6 +44,7 @@ export const ReportsPage: React.FC<ReportsPageProps> = ({
     let deliveredCount = 0;
 
     const statusCounts: Record<OrderStatus, number> = {
+      returned_to_sales: 0,
       in_production: 0,
       pending_finance_approval: 0,
       finance_discrepancy_review: 0,
