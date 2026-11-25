@@ -470,7 +470,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
             <p className="inline-flex items-center gap-1.5">
               <ArrowLeftRight className="w-3.5 h-3.5 text-[#0f5864] shrink-0" />
-              جدول را افقی اسکرول کنید (نام محصول و مجموع ثابت می‌مانند).
+              چیدمان ستون‌ها بر اساس زمان ثبت فاکتور است (قدیمی‌ترین در وزن ۱ و جدیدترها در ستون‌های بعدی).
             </p>
             <span className="tabular-nums font-semibold text-[#0f5864]">
               {prepSummary.rows.length} محصول · حداکثر {prepSummary.maxColumns} سفارش هم‌زمان
@@ -574,16 +574,22 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                               {alloc.deliverySlot}
                             </td>
                             <td
-                              className={`tabular-nums px-3 sm:px-4 py-3 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap ${
+                              className={`tabular-nums px-3 sm:px-4 py-2.5 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap ${
                                 isWeighed ? 'bg-emerald-50/40' : ''
                               }`}
                             >
                               <button
                                 type="button"
                                 onClick={() => onSelectOrder(alloc.orderId)}
-                                className="min-h-[36px] px-2 hover:underline text-[#0056b3] font-bold"
+                                title={`زمان ثبت فاکتور: ${alloc.createdAt}`}
+                                className="min-h-[36px] px-2 hover:underline text-[#0056b3] font-bold flex flex-col items-center justify-center mx-auto leading-tight"
                               >
-                                {alloc.orderCode}
+                                <span>{alloc.orderCode}</span>
+                                <span className="text-[10px] font-medium text-slate-400 mt-0.5">
+                                  {alloc.createdAt.includes(' - ')
+                                    ? alloc.createdAt.split(' - ')[1]
+                                    : alloc.createdAt}
+                                </span>
                               </button>
                             </td>
                           </React.Fragment>

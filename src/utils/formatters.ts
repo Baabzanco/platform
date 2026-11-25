@@ -65,11 +65,58 @@ export function getStatusLabel(status: OrderStatus): string {
   }
 }
 
+function toLatinDigits(str: string): string {
+  return str
+    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
+}
+
+/**
+ * Computes a deterministic chronological sort key for an order's invoice creation time
+ * (smaller = older invoice -> placed in "وزن ۱", larger = newer -> placed in subsequent columns).
+ */
+export function getOrderCreatedSortKey(order: Order): number {
+  if (typeof order.createdAtTimestamp === 'number' && Number.isFinite(order.createdAtTimestamp)) {
+    return order.createdAtTimestamp;
+  }
+
+  // Orders created dynamically before createdAtTimestamp was introduced carry Date.now() in their id
+  const idTsMatch = order.id.match(/^order-(\d{12,15})-/);
+  if (idTsMatch) {
+    return Number(idTsMatch[1]);
+  }
+
+  // Parse Persian Jalali timestamp strings such as "۱۴۰۵/۰۹/۰۱ - ۰۹:۱۵"
+  const normalized = toLatinDigits(order.createdAt || '');
+  const match = normalized.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})\D+(\d{1,2}):(\d{1,2})/);
+  if (match) {
+    const year = parseInt(match[1], 10);
+    const month = parseInt(match[2], 10);
+    const day = parseInt(match[3], 10);
+    const hour = parseInt(match[4], 10);
+    const minute = parseInt(match[5], 10);
+    return ((((year * 100 + month) * 100 + day) * 100 + hour) * 100 + minute);
+  }
+
+  return order.lastActionAt;
+}
+
 export function buildPreparationSummary(orders: Order[]): {
   rows: PrepProductRow[];
   maxColumns: number;
 } {
-  const activeOrders = orders.filter((order) => order.status === 'in_production');
+  const activeOrders = orders
+    .filter((order) => order.status === 'in_production')
+    .sort((a, b) => {
+      const timeDiff = getOrderCreatedSortKey(a) - getOrderCreatedSortKey(b);
+      if (timeDiff !== 0) return timeDiff;
+      const codeA = parseInt(toLatinDigits(a.code), 10);
+      const codeB = parseInt(toLatinDigits(b.code), 10);
+      if (Number.isFinite(codeA) && Number.isFinite(codeB) && codeA !== codeB) {
+        return codeA - codeB;
+      }
+      return a.id.localeCompare(b.id);
+    });
 
   const grouped = new Map<string, PrepProductRow>();
 
@@ -81,6 +128,7 @@ export function buildPreparationSummary(orders: Order[]): {
         itemId: item.id,
         orderCode: order.code,
         deliverySlot: order.deliverySlot,
+        createdAt: order.createdAt,
         requestedWeight: item.requestedWeight,
         producedWeight: item.producedWeight,
       };
@@ -111,12 +159,6 @@ export function buildPreparationSummary(orders: Order[]): {
   const maxColumns = rows.reduce((max, row) => Math.max(max, row.allocations.length), 1);
 
   return { rows, maxColumns };
-}
-
-function toLatinDigits(str: string): string {
-  return str
-    .replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
-    .replace(/[٠-٩]/g, (d) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)));
 }
 
 /**

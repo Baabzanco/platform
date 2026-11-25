@@ -249,6 +249,7 @@ export function useOrderStore() {
           shipping: false,
         },
         createdAt: `${persianDate} - ${hh}:${mm}`,
+        createdAtTimestamp: now,
         lastActionAt: now,
         items: input.items.map((item, idx) => ({
           id: `${orderId}-item-${idx + 1}`,

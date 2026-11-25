@@ -127,6 +127,7 @@ export interface Order {
   deliveryDate: string; // e.g. "1405-09-01"
   seenByDept: Record<WorkflowDepartment, boolean>;
   createdAt: string;
+  createdAtTimestamp?: number;
   lastActionAt: number;
 }
 
@@ -181,6 +182,7 @@ export interface PrepAllocation {
   itemId: string;
   orderCode: string;
   deliverySlot: string;
+  createdAt: string;
   requestedWeight: number;
   producedWeight: number | null;
 }
