@@ -3,12 +3,15 @@ import {
   AlertTriangle,
   ArrowRight,
   Ban,
+  Banknote,
   Briefcase,
   Building2,
   Calculator,
   CalendarClock,
   CheckCircle2,
   Clock,
+  ExternalLink,
+  FileCheck2,
   FileSpreadsheet,
   FileText,
   Image as ImageIcon,
@@ -41,6 +44,7 @@ import {
 import { getCustomerAccountingEntries } from '../../data/customerAccountingData';
 import { buildFinancialStatusLabel } from '../../hooks/useCustomerStore';
 import {
+  CustomerAccountingEntry,
   CustomerCallItem,
   CustomerContact,
   CustomerCreditInfo,
@@ -50,12 +54,15 @@ import {
   CustomerRelationshipType,
   CustomerStandingTier,
 } from '../../types/customer';
+import { Order } from '../../types/order';
 import { formatRial, formatWeight } from '../../utils/formatters';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
+import { AccountingEntryDetailModal } from '../modals/AccountingEntryDetailModal';
 
 interface CustomerProfilePageProps {
   customer: CustomerRecord;
   allCustomers: CustomerRecord[];
+  orders?: Order[];
   onBackToList: () => void;
   onSwitchCustomer: (customerId: string) => void;
   onUpdateCustomer: (
@@ -107,6 +114,7 @@ const PROFILE_TABS: Array<{
 export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
   customer,
   allCustomers,
+  orders,
   onBackToList,
   onSwitchCustomer,
   onUpdateCustomer,
@@ -250,9 +258,16 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
     customer.credit.creditLimitRial - customer.credit.usedCreditRial
   );
 
+  const [selectedAccountingEntry, setSelectedAccountingEntry] =
+    useState<CustomerAccountingEntry | null>(null);
+
+  useEffect(() => {
+    setSelectedAccountingEntry(null);
+  }, [customer.id]);
+
   const accountingEntries = useMemo(
-    () => getCustomerAccountingEntries(customer),
-    [customer]
+    () => getCustomerAccountingEntries(customer, orders),
+    [customer, orders]
   );
 
   const accountingTotals = useMemo(() => {
@@ -1342,7 +1357,7 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                     رخداد حسابداری (دفتر معین طرف حساب)
                   </h2>
                   <span className="text-[11px] text-slate-500">
-                    · فقط نمایش (غیرقابل ویرایش)
+                    · برای مشاهده جزئیات سفارش و مدارک تسویه روی عنوان کلیک کنید
                   </span>
                 </div>
               </div>
@@ -1377,9 +1392,9 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                 </div>
               </div>
 
-              {/* Excel-Style Grid Table (Strict Read-Only) */}
+              {/* Excel-Style Grid Table (Read-Only with Linked Order/Settlement Details) */}
               <div className="overflow-x-auto select-text">
-                <table className="w-full min-w-[680px] border-collapse text-xs">
+                <table className="w-full min-w-[780px] border-collapse text-xs">
                   <thead>
                     <tr className="bg-[#e8eeea] text-slate-800 font-bold">
                       <th className="w-11 px-2.5 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
@@ -1390,6 +1405,9 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                       </th>
                       <th className="px-3.5 py-2.5 text-right border-b border-l border-slate-300">
                         عنوان
+                      </th>
+                      <th className="w-36 px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                        محل تسویه
                       </th>
                       <th className="w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
                         بدهکار (ریال)
@@ -1407,6 +1425,11 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                       const isBalanceRow = entry.kind === 'balance';
                       const isDebitRow = entry.kind === 'debit';
                       const isCreditRow = entry.kind === 'credit';
+                      const hasDetailPopup = Boolean(
+                        entry.orderDetails ||
+                          entry.chequeDetails ||
+                          entry.cashDetails
+                      );
 
                       const rowBg = isBalanceRow
                         ? 'bg-slate-100/90 font-bold'
@@ -1432,7 +1455,68 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                                 : 'text-slate-800 font-medium'
                             }`}
                           >
-                            {entry.title}
+                            {hasDetailPopup ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAccountingEntry(entry)}
+                                className="group text-right text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/45 hover:decoration-[#083942] underline-offset-4 font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                              >
+                                <span>{entry.title}</span>
+                                <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                            ) : (
+                              entry.title
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                            {entry.settlementMethod === 'cheque' ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAccountingEntry(entry)}
+                                className="inline-flex flex-col items-center leading-tight text-indigo-800 hover:underline cursor-pointer"
+                              >
+                                <span className="inline-flex items-center gap-1 font-bold">
+                                  <FileCheck2 className="w-3.5 h-3.5 shrink-0" />
+                                  چک صیادی
+                                </span>
+                                {entry.chequeDetails && (
+                                  <span
+                                    className={`text-[10px] font-semibold mt-0.5 ${
+                                      entry.chequeDetails.status === 'bounced'
+                                        ? 'text-red-700'
+                                        : entry.chequeDetails.status ===
+                                            'cleared'
+                                          ? 'text-emerald-700'
+                                          : 'text-amber-700'
+                                    }`}
+                                  >
+                                    {entry.chequeDetails.status === 'bounced'
+                                      ? 'برگشتی'
+                                      : entry.chequeDetails.status === 'cleared'
+                                        ? 'پاس‌شده'
+                                        : 'در جریان وصول'}
+                                  </span>
+                                )}
+                              </button>
+                            ) : entry.settlementMethod === 'cash' ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAccountingEntry(entry)}
+                                className="inline-flex flex-col items-center leading-tight text-emerald-800 hover:underline cursor-pointer"
+                              >
+                                <span className="inline-flex items-center gap-1 font-bold">
+                                  <Banknote className="w-3.5 h-3.5 shrink-0" />
+                                  نقدی
+                                </span>
+                                {entry.cashDetails && (
+                                  <span className="text-[10px] text-slate-500 font-medium mt-0.5 max-w-[120px] truncate">
+                                    مدارک راننده ثبت شده
+                                  </span>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
                           <td
                             className={`px-3 py-2.5 text-left tabular-nums border-b border-l border-slate-300 whitespace-nowrap ${
@@ -1482,7 +1566,7 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                   <tfoot>
                     <tr className="bg-[#e8eeea] font-bold text-slate-900 tabular-nums">
                       <td
-                        colSpan={3}
+                        colSpan={4}
                         className="px-3.5 py-3 text-right border-t-2 border-l border-slate-400"
                       >
                         جمع کل گردش و مانده نهایی
@@ -2314,6 +2398,12 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
           </form>
         </div>
       )}
+      {/* Accounting Entry Order & Settlement Detail Popup */}
+      <AccountingEntryDetailModal
+        entry={selectedAccountingEntry}
+        customer={customer}
+        onClose={() => setSelectedAccountingEntry(null)}
+      />
     </div>
   );
 };

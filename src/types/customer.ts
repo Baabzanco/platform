@@ -17,6 +17,53 @@ export type CustomerProfileTab =
 
 export type AccountingRowKind = 'debit' | 'credit' | 'balance';
 
+export type SettlementMethod = 'cash' | 'cheque';
+
+export interface AccountingOrderItem {
+  id: string;
+  productName: string;
+  weightKg: number;
+  unitPriceRial: number;
+  totalRial: number;
+}
+
+export interface AccountingOrderSummary {
+  orderCode: string;
+  orderDate: string;
+  deliverySlot: string;
+  driverName: string;
+  salesRep: string;
+  address: string;
+  statusLabel: string;
+  totalRial: number;
+  items: AccountingOrderItem[];
+  note?: string;
+}
+
+export interface AccountingChequeDetails {
+  sayadiId: string;
+  chequeNumber: string;
+  bankName: string;
+  branchName: string;
+  dueDate: string;
+  amountRial: number;
+  issuerName: string;
+  status: 'cleared' | 'pending' | 'bounced';
+  statusNote?: string;
+}
+
+export interface AccountingCashPaymentDetails {
+  channelLabel: string;
+  trackingCode: string;
+  paidAt: string;
+  driverName: string;
+  amountRial: number;
+  invoicePhotoUrl: string;
+  invoicePhotoCaption?: string;
+  paymentReceiptPhotoUrl: string;
+  paymentReceiptPhotoCaption?: string;
+}
+
 export interface CustomerAccountingEntry {
   id: string;
   date: string;
@@ -25,6 +72,11 @@ export interface CustomerAccountingEntry {
   creditRial: number;
   runningBalanceRial: number;
   kind: AccountingRowKind;
+  orderCode?: string;
+  settlementMethod?: SettlementMethod;
+  orderDetails?: AccountingOrderSummary;
+  chequeDetails?: AccountingChequeDetails;
+  cashDetails?: AccountingCashPaymentDetails;
 }
 
 export interface CustomerContact {

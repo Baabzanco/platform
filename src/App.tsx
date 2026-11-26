@@ -565,6 +565,7 @@ export default function App() {
               <CustomerProfilePage
                 customer={selectedCustomer}
                 allCustomers={customers}
+                orders={orders}
                 onBackToList={() => setSelectedCustomerId(null)}
                 onSwitchCustomer={(id) => setSelectedCustomerId(id)}
                 onUpdateCustomer={updateCustomerBasic}
