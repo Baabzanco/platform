@@ -35,14 +35,23 @@ const INITIAL_LOCATION_BY_ID = new Map(
   ])
 );
 
+const INITIAL_ORDER_BY_ID = new Map(INITIAL_ORDERS.map((o) => [o.id, o]));
+
 function normalizeOrders(orders: Order[]): Order[] {
   return orders.map((order, idx) => {
+    const template = INITIAL_ORDER_BY_ID.get(order.id);
     const normalized: Order = {
       ...order,
       status:
         (order.status as string) === 'pending_production_approval'
           ? 'in_production'
           : order.status,
+      customerStanding:
+        order.customerStanding ?? template?.customerStanding ?? 'green',
+      customerStandingLabel:
+        order.customerStandingLabel ?? template?.customerStandingLabel,
+      managementApproval:
+        order.managementApproval ?? template?.managementApproval,
       district: order.district || 'محدوده تهران',
       routeOrder: typeof order.routeOrder === 'number' ? order.routeOrder : idx + 1,
       customerLocation:
@@ -80,6 +89,9 @@ function loadInitialState(): PersistedState {
             sales: Array.isArray(parsed.unreadByDept.sales)
               ? parsed.unreadByDept.sales
               : [],
+            management: Array.isArray(parsed.unreadByDept.management)
+              ? parsed.unreadByDept.management
+              : [],
             production: Array.isArray(parsed.unreadByDept.production)
               ? parsed.unreadByDept.production
               : [],
@@ -100,6 +112,7 @@ function loadInitialState(): PersistedState {
     orders: INITIAL_ORDERS,
     unreadByDept: {
       sales: [],
+      management: [],
       production: [],
       finance: [],
       shipping: [],
@@ -229,17 +242,26 @@ export function useOrderStore() {
       const hh = toPersianDigits(String(nowDate.getHours()).padStart(2, '0'));
       const mm = toPersianDigits(String(nowDate.getMinutes()).padStart(2, '0'));
 
+      const standing = input.customerStanding ?? 'green';
+      const needsManagementApproval =
+        standing === 'yellow' || standing === 'red' || standing === 'black';
+
       const newOrder: Order = {
         id: orderId,
         code: nextCode,
         deliverySlot: input.deliverySlot,
+        customerId: input.customerId,
         customerName: input.customerName.trim(),
         customerPhone: input.customerPhone.trim(),
+        customerStanding: standing,
+        customerStandingLabel: input.customerStandingLabel,
         district: input.district.trim() || 'تهران',
         address: input.address.trim(),
         notes: input.notes.trim() || 'ثبت‌شده توسط کارشناس فروش',
         callDurationSeconds: 0,
-        status: 'in_production',
+        status: needsManagementApproval
+          ? 'pending_management_approval'
+          : 'in_production',
         driverName: '',
         routeOrder: dayOrdersCount + 1,
         deliveryDate: input.deliveryDate,
@@ -266,38 +288,62 @@ export function useOrderStore() {
 
       setOrders((prev) => [newOrder, ...prev]);
 
-      const title = `ثبت فاکتور جدید — سفارش ${nextCode}`;
-      const message = `سفارش ${nextCode} برای «${newOrder.customerName}» ثبت شد و جهت آماده‌سازی و توزین به بخش تولید ارسال گردید.`;
-      pushToast(title, message, 'ارسال به بخش تولید', 'success');
-      queueDeptNotification('production', title, message, 'info');
+      if (needsManagementApproval) {
+        const tierLabel =
+          standing === 'red'
+            ? 'قرمز'
+            : standing === 'yellow'
+              ? 'زرد'
+              : 'بلک‌لیست';
+        const title = `ارسال به مدیریت جهت تایید اعتبار — سفارش ${nextCode}`;
+        const message = `سفارش ${nextCode} برای «${newOrder.customerName}» به‌دلیل وضعیت اعتباری ${tierLabel} ابتدا به صفحه مدیریت ارسال شد و پس از تایید مدیریت وارد صف تولید خواهد شد.`;
+        pushToast(title, message, 'ارسال به بخش مدیریت', 'warning');
+        queueDeptNotification('management', title, message, 'warning');
+      } else {
+        const title = `ثبت فاکتور جدید — سفارش ${nextCode}`;
+        const message = `سفارش ${nextCode} برای «${newOrder.customerName}» ثبت شد و جهت آماده‌سازی و توزین به بخش تولید ارسال گردید.`;
+        pushToast(title, message, 'ارسال به بخش تولید', 'success');
+        queueDeptNotification('production', title, message, 'info');
+      }
 
       return newOrder;
     },
     [orders, pushToast, queueDeptNotification]
   );
 
-  // 0b. Sales Specialist: edit & re-submit a returned_to_sales order back to Production
+  // 0b. Sales Specialist: edit & re-submit a returned_to_sales order (routes to Management if yellow/red/black, else Production)
   const resubmitOrderToProduction = useCallback(
     (orderId: string, input: CreateOrderInput) => {
       const target = orders.find((o) => o.id === orderId);
       if (!target) return;
 
+      const standing = input.customerStanding ?? target.customerStanding ?? 'green';
+      const needsManagementApproval =
+        standing === 'yellow' || standing === 'red' || standing === 'black';
       const now = Date.now();
+
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId) return order;
           return {
             ...order,
+            customerId: input.customerId ?? order.customerId,
             customerName: input.customerName.trim(),
             customerPhone: input.customerPhone.trim(),
+            customerStanding: standing,
+            customerStandingLabel:
+              input.customerStandingLabel ?? order.customerStandingLabel,
             district: input.district.trim() || 'تهران',
             address: input.address.trim(),
             deliveryDate: input.deliveryDate,
             deliverySlot: input.deliverySlot,
             notes: input.notes.trim() || 'اصلاح و ارسال مجدد توسط کارشناس فروش',
-            status: 'in_production',
+            status: needsManagementApproval
+              ? 'pending_management_approval'
+              : 'in_production',
             driverName: '',
             salesReturn: undefined,
+            managementApproval: undefined,
             rejection: undefined,
             discrepancy: undefined,
             returnRecord: undefined,
@@ -323,10 +369,55 @@ export function useOrderStore() {
         })
       );
 
-      const title = `ارسال مجدد سفارش ${target.code} به تولید`;
-      const message = `سفارش ${target.code} پس از اصلاح توسط کارشناس فروش مجدداً به صف تولید ارسال شد.`;
-      pushToast(title, message, 'بخش کارشناس فروش', 'success');
-      queueDeptNotification('production', title, message, 'info');
+      if (needsManagementApproval) {
+        const title = `ارسال مجدد سفارش ${target.code} به مدیریت`;
+        const message = `سفارش ${target.code} پس از اصلاح توسط کارشناس فروش به‌دلیل وضعیت اعتباری مشتری مجدداً جهت تایید به بخش مدیریت ارسال شد.`;
+        pushToast(title, message, 'ارسال به بخش مدیریت', 'warning');
+        queueDeptNotification('management', title, message, 'warning');
+      } else {
+        const title = `ارسال مجدد سفارش ${target.code} به تولید`;
+        const message = `سفارش ${target.code} پس از اصلاح توسط کارشناس فروش مجدداً به صف تولید ارسال شد.`;
+        pushToast(title, message, 'بخش کارشناس فروش', 'success');
+        queueDeptNotification('production', title, message, 'info');
+      }
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 0d. Management: approve a yellow/red credit customer's order and release it to Production
+  const approveManagementOrder = useCallback(
+    (orderId: string, note?: string) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target || target.status !== 'pending_management_approval') return;
+
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          return {
+            ...order,
+            status: 'in_production',
+            lastActionAt: now,
+            seenByDept: {
+              ...order.seenByDept,
+              production: false,
+            },
+            managementApproval: {
+              approved: true,
+              approvedBy: 'امیر مرادصالح',
+              approvedAt: stamp,
+              note: note?.trim() || undefined,
+            },
+          };
+        })
+      );
+
+      const title = `تایید مدیریت و ارسال به تولید — سفارش ${target.code}`;
+      const message = `سفارش ${target.code} (${target.customerName}) توسط مدیریت تایید اعتباری شد و برای آماده‌سازی و توزین به بخش تولید ارسال گردید.`;
+      pushToast(title, message, 'ارسال به بخش تولید', 'success');
+      queueDeptNotification('production', title, message, 'success');
     },
     [orders, pushToast, queueDeptNotification]
   );
@@ -966,7 +1057,13 @@ export function useOrderStore() {
   // 16. Reset demo dataset
   const resetDemoData = useCallback(() => {
     setOrders(INITIAL_ORDERS);
-    setUnreadByDept({ sales: [], production: [], finance: [], shipping: [] });
+    setUnreadByDept({
+      sales: [],
+      management: [],
+      production: [],
+      finance: [],
+      shipping: [],
+    });
     localStorage.removeItem(STORAGE_KEY);
     pushToast(
       'بازنشانی داده‌ها انجام شد',
@@ -986,6 +1083,7 @@ export function useOrderStore() {
     markDateSeenByDept,
     createOrder,
     resubmitOrderToProduction,
+    approveManagementOrder,
     returnOrderToSales,
     recordItemWeight,
     completeProduction,

@@ -36,6 +36,7 @@ type ShippingFilter =
 
 function isLocked(order: Order): boolean {
   return (
+    order.status === 'pending_management_approval' ||
     order.status === 'in_production' ||
     order.status === 'pending_finance_approval' ||
     order.status === 'finance_discrepancy_review'
@@ -76,6 +77,12 @@ function getShippingStatusDisplay(order: Order): {
     return {
       label: src ? `برگشت‌خورده به فروش (${src})` : 'برگشت‌خورده به فروش',
       className: 'text-amber-800',
+    };
+  }
+  if (order.status === 'pending_management_approval') {
+    return {
+      label: 'در انتظار تایید مدیریت',
+      className: 'text-amber-700',
     };
   }
   if (order.status === 'rejected') {

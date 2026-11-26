@@ -5,12 +5,12 @@ export type PermissionKey =
   // 1.1 Pages & Navigation
   | 'section_calendar'
   | 'section_sales'
+  | 'section_management'
   | 'section_production'
   | 'section_prep_matrix'
   | 'section_finance'
   | 'section_shipping'
   | 'section_driver'
-  | 'section_reports'
   | 'section_access_control'
   // 1.2 Core Order & Customer Fields
   | 'field_order_code'
@@ -34,6 +34,7 @@ export type PermissionKey =
   | 'field_order_total'
   // 1.4 Sales & Production Actions
   | 'action_sales_create_order'
+  | 'action_management_approve'
   | 'action_return_to_sales'
   | 'action_production_weigh'
   | 'action_production_complete'
@@ -105,6 +106,7 @@ export interface PermissionCategory {
 export type AccessPresetId =
   | 'admin_full'
   | 'sales_specialist'
+  | 'management_role'
   | 'production_operator'
   | 'finance_specialist'
   | 'shipping_coordinator'

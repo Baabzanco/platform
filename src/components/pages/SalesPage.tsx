@@ -31,6 +31,7 @@ import {
   getStatusLabel,
 } from '../../utils/formatters';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
+import { CreditStandingTag } from '../CreditStandingTag';
 
 interface SalesPageProps {
   orders: Order[];
@@ -46,6 +47,7 @@ interface SalesPageProps {
 type SalesFilter =
   | 'all'
   | 'returned_to_sales'
+  | 'pending_management_approval'
   | 'in_production'
   | 'finance'
   | 'pending_shipping'
@@ -55,13 +57,14 @@ type SalesFilter =
 
 function getSalesSortRank(order: Order): number {
   if (order.status === 'returned_to_sales') return 0;
-  if (order.status === 'in_production') return 1;
-  if (order.status === 'finance_discrepancy_review') return 2;
-  if (order.status === 'pending_finance_approval') return 3;
-  if (order.status === 'pending_shipping') return 4;
-  if (order.status === 'delivered') return 5;
-  if (order.status === 'returned') return 6;
-  return 7;
+  if (order.status === 'pending_management_approval') return 1;
+  if (order.status === 'in_production') return 2;
+  if (order.status === 'finance_discrepancy_review') return 3;
+  if (order.status === 'pending_finance_approval') return 4;
+  if (order.status === 'pending_shipping') return 5;
+  if (order.status === 'delivered') return 6;
+  if (order.status === 'returned') return 7;
+  return 8;
 }
 
 function getSalesStatusStyle(order: Order): {
@@ -78,6 +81,8 @@ function getSalesStatusStyle(order: Order): {
         textClass: 'text-amber-800',
       };
     }
+    case 'pending_management_approval':
+      return { label: 'در انتظار تایید مدیریت', textClass: 'text-amber-700' };
     case 'in_production':
       return { label: 'در حال تولید و توزین', textClass: 'text-sky-700' };
     case 'pending_finance_approval':
@@ -128,6 +133,8 @@ export const SalesPage: React.FC<SalesPageProps> = ({
       const matchesFilter =
         filter === 'all' ||
         (filter === 'returned_to_sales' && order.status === 'returned_to_sales') ||
+        (filter === 'pending_management_approval' &&
+          order.status === 'pending_management_approval') ||
         (filter === 'in_production' && order.status === 'in_production') ||
         (filter === 'finance' &&
           (order.status === 'pending_finance_approval' ||
@@ -235,6 +242,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         label: 'برگشت‌خورده به فروش',
                       },
                     ]),
+                { id: 'pending_management_approval', label: 'تایید مدیریت' },
                 { id: 'in_production', label: 'در تولید' },
                 { id: 'finance', label: 'صدور فاکتور' },
                 { id: 'pending_shipping', label: 'آماده ارسال' },
@@ -388,9 +396,16 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                         <span className="block text-[11px] text-slate-500 mb-0.5">
                           طرف حساب / مشتری
                         </span>
-                        <span className="font-bold text-slate-900 block truncate">
-                          {order.customerName}
-                        </span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-bold text-slate-900 truncate max-w-full">
+                            {order.customerName}
+                          </span>
+                          <CreditStandingTag
+                            standing={order.customerStanding}
+                            standingLabel={order.customerStandingLabel}
+                            size="xs"
+                          />
+                        </div>
                       </div>
 
                       <div>

@@ -22,6 +22,7 @@ import {
   formatWeight,
   getFinanceWeight,
 } from '../../utils/formatters';
+import { CreditStandingTag } from '../CreditStandingTag';
 
 interface FinancePageProps {
   orders: Order[];
@@ -84,9 +85,10 @@ function getFinanceSortRank(order: Order): number {
   if (order.status === 'pending_finance_approval') return 3;
   if (hasRejectedDriverDocsAwaitingRetake(order)) return 4;
   if (isWaitingProd(order)) return 5;
-  if (isFinanceApproved(order)) return 6;
-  if (order.status === 'returned') return 7;
-  return 8;
+  if (order.status === 'pending_management_approval') return 6;
+  if (isFinanceApproved(order)) return 7;
+  if (order.status === 'returned') return 8;
+  return 9;
 }
 
 export const FinancePage: React.FC<FinancePageProps> = ({
@@ -151,6 +153,12 @@ export const FinancePage: React.FC<FinancePageProps> = ({
       return {
         text: src ? `برگشت‌خورده به فروش (${src})` : 'برگشت‌خورده به فروش',
         className: 'text-amber-800',
+      };
+    }
+    if (order.status === 'pending_management_approval') {
+      return {
+        text: 'در انتظار تایید مدیریت',
+        className: 'text-amber-700',
       };
     }
     if (order.status === 'rejected') {
@@ -410,11 +418,26 @@ export const FinancePage: React.FC<FinancePageProps> = ({
 
                         <div className="min-w-0">
                           <span className="block text-[11px] text-slate-500 mb-0.5">
-                            طرف حساب
+                            طرف حساب و وضعیت اعتباری
                           </span>
-                          <span className="font-semibold text-slate-900 block truncate">
-                            {order.customerName}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-semibold text-slate-900 truncate max-w-full">
+                              {order.customerName}
+                            </span>
+                            <CreditStandingTag
+                              standing={order.customerStanding}
+                              standingLabel={order.customerStandingLabel}
+                              size="xs"
+                            />
+                            {order.managementApproval?.approved &&
+                              (order.customerStanding === 'yellow' ||
+                                order.customerStanding === 'red' ||
+                                order.customerStanding === 'black') && (
+                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                  تایید مدیریت
+                                </span>
+                              )}
+                          </div>
                         </div>
 
                         <div>

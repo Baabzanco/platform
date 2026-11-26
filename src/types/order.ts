@@ -1,22 +1,30 @@
+import { CustomerStandingTier } from './customer';
+
 export type Department =
   | 'sales'
+  | 'management'
   | 'production'
   | 'finance'
   | 'shipping'
   | 'driver'
-  | 'reports'
   | 'access'
   | 'customers'
   | 'product_photos';
 
 export type WorkflowDepartment = 'production' | 'finance' | 'shipping';
 
-export type NotificationDepartment = 'sales' | WorkflowDepartment;
+export type NotificationDepartment = 'sales' | 'management' | WorkflowDepartment;
 
-export type ReturnToSalesSource = 'production' | 'finance' | 'shipping' | 'driver';
+export type ReturnToSalesSource =
+  | 'management'
+  | 'production'
+  | 'finance'
+  | 'shipping'
+  | 'driver';
 
 export type OrderStatus =
   | 'returned_to_sales'
+  | 'pending_management_approval'
   | 'in_production'
   | 'pending_finance_approval'
   | 'finance_discrepancy_review'
@@ -47,6 +55,13 @@ export interface SalesReturnRecord {
   source: ReturnToSalesSource;
   reason: string;
   timestamp: string;
+}
+
+export interface ManagementApprovalRecord {
+  approved: boolean;
+  approvedBy: string;
+  approvedAt: string;
+  note?: string;
 }
 
 export interface DiscrepancyRecord {
@@ -108,8 +123,11 @@ export interface Order {
   id: string;
   code: string;
   deliverySlot: string;
+  customerId?: string;
   customerName: string;
   customerPhone: string;
+  customerStanding?: CustomerStandingTier;
+  customerStandingLabel?: string;
   district: string;
   address: string;
   notes: string;
@@ -122,6 +140,7 @@ export interface Order {
   driverDelivery?: DriverDeliveryRecord;
   rejection?: RejectionRecord;
   salesReturn?: SalesReturnRecord;
+  managementApproval?: ManagementApprovalRecord;
   discrepancy?: DiscrepancyRecord;
   returnRecord?: ReturnRecord;
   deliveryDate: string; // e.g. "1405-09-01"
@@ -138,8 +157,11 @@ export interface CreateOrderItemInput {
 }
 
 export interface CreateOrderInput {
+  customerId?: string;
   customerName: string;
   customerPhone: string;
+  customerStanding?: CustomerStandingTier;
+  customerStandingLabel?: string;
   district: string;
   address: string;
   deliveryDate: string;

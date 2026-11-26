@@ -6,8 +6,8 @@ import {
   MonitorPlay,
   MoreHorizontal,
   Navigation,
-  PieChart,
   RotateCcw,
+  ShieldAlert,
   ShieldCheck,
   Truck,
   UserCircle2,
@@ -40,6 +40,13 @@ const NAV_ITEMS: Array<{
     badgeKey: 'sales',
   },
   {
+    id: 'management',
+    label: 'بخش مدیریت (تایید اعتبار)',
+    shortLabel: 'مدیریت',
+    icon: ShieldAlert,
+    badgeKey: 'management',
+  },
+  {
     id: 'production',
     label: 'بخش تولید',
     shortLabel: 'تولید',
@@ -66,12 +73,6 @@ const NAV_ITEMS: Array<{
     shortLabel: 'راننده',
     icon: Navigation,
     isDriver: true,
-  },
-  {
-    id: 'reports',
-    label: 'گزارش‌ها و آمار',
-    shortLabel: 'گزارش‌ها',
-    icon: PieChart,
   },
   {
     id: 'access',
@@ -116,11 +117,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const isMoreActive =
+    activePage === 'management' ||
     activePage === 'driver' ||
-    activePage === 'reports' ||
     activePage === 'access' ||
     activePage === 'customers' ||
     activePage === 'product_photos';
+
+  const moreBadgeCount = unreadCounts.management + rejectedDriverDocsCount;
 
   return (
     <>
@@ -258,9 +261,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <MoreHorizontal className="w-[21px] h-[21px]" />
-              {rejectedDriverDocsCount > 0 && (
+              {moreBadgeCount > 0 && (
                 <span className="tabular-nums absolute -top-1.5 -right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center border border-white">
-                  {rejectedDriverDocsCount}
+                  {moreBadgeCount}
                 </span>
               )}
             </span>
@@ -312,6 +315,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 type="button"
                 onClick={() => {
                   setMoreOpen(false);
+                  onSelectPage('management');
+                }}
+                className={`w-full min-h-[48px] px-4 rounded-xl flex items-center justify-between gap-3 text-sm font-semibold transition-colors ${
+                  activePage === 'management'
+                    ? 'bg-[#0f5864]/10 text-[#0f5864]'
+                    : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <ShieldAlert className="w-5 h-5 shrink-0" />
+                  <span>بخش مدیریت (تایید اعتبار)</span>
+                </span>
+                {unreadCounts.management > 0 && (
+                  <span className="tabular-nums min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center">
+                    {unreadCounts.management}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
                   onSelectPage('driver');
                 }}
                 className={`w-full min-h-[48px] px-4 rounded-xl flex items-center justify-between gap-3 text-sm font-semibold transition-colors ${
@@ -329,22 +355,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {rejectedDriverDocsCount}
                   </span>
                 )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  onSelectPage('reports');
-                }}
-                className={`w-full min-h-[48px] px-4 rounded-xl flex items-center gap-3 text-sm font-semibold transition-colors ${
-                  activePage === 'reports'
-                    ? 'bg-[#0f5864]/10 text-[#0f5864]'
-                    : 'text-slate-800 hover:bg-slate-50'
-                }`}
-              >
-                <PieChart className="w-5 h-5 shrink-0" />
-                <span>گزارش‌ها و آمار زنده</span>
               </button>
 
               <button

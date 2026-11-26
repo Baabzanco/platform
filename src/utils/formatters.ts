@@ -48,6 +48,8 @@ export function getStatusLabel(status: OrderStatus): string {
   switch (status) {
     case 'returned_to_sales':
       return 'برگشت‌خورده به فروش';
+    case 'pending_management_approval':
+      return 'در انتظار تایید مدیریت';
     case 'in_production':
       return 'در حال تولید و توزین';
     case 'pending_finance_approval':

@@ -86,9 +86,14 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProdFilter>('all');
 
+  const productionVisibleOrders = useMemo(
+    () => orders.filter((o) => o.status !== 'pending_management_approval'),
+    [orders]
+  );
+
   const sortedAndFilteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const filtered = orders.filter((order) => {
+    const filtered = productionVisibleOrders.filter((order) => {
       const matchesFilter =
         statusFilter === 'all' ||
         (statusFilter === 'in_progress' && order.status === 'in_production') ||
@@ -116,7 +121,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
       }
       return 0;
     });
-  }, [orders, searchQuery, statusFilter]);
+  }, [productionVisibleOrders, searchQuery, statusFilter]);
 
   const priorityCount = useMemo(
     () => sortedAndFilteredOrders.filter(isProdPriority).length,
@@ -124,11 +129,14 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
   );
 
   const readyForFinalApprovalCount = useMemo(
-    () => orders.filter(isReadyForFinalApprovalInProd).length,
-    [orders]
+    () => productionVisibleOrders.filter(isReadyForFinalApprovalInProd).length,
+    [productionVisibleOrders]
   );
 
-  const prepSummary = useMemo(() => buildPreparationSummary(orders), [orders]);
+  const prepSummary = useMemo(
+    () => buildPreparationSummary(productionVisibleOrders),
+    [productionVisibleOrders]
+  );
 
   const handleOpenPrepWeight = (orderId: string, itemId: string) => {
     const targetOrder = orders.find((o) => o.id === orderId);
@@ -177,7 +185,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
             <ClipboardList className="w-4 h-4 shrink-0" />
             <span>لیست سفارشات</span>
             <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
-              ({orders.length})
+              ({productionVisibleOrders.length})
             </span>
             {readyForFinalApprovalCount > 0 && (
               <span className="tabular-nums px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
@@ -260,11 +268,11 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
           {sortedAndFilteredOrders.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
               <p className="text-sm font-medium text-slate-600 mb-3">
-                {orders.length === 0
-                  ? 'در این تاریخ هیچ سفارشی ثبت نشده است.'
+                {productionVisibleOrders.length === 0
+                  ? 'در این تاریخ هیچ سفارشی برای بخش تولید ثبت یا تایید نشده است.'
                   : 'هیچ سفارشی با فیلتر انتخاب‌شده یافت نشد.'}
               </p>
-              {orders.length > 0 && (
+              {productionVisibleOrders.length > 0 && (
                 <button
                   type="button"
                   onClick={() => {

@@ -29,9 +29,9 @@ import { CustomerProfilePage } from './components/pages/CustomerProfilePage';
 import { CustomersListPage } from './components/pages/CustomersListPage';
 import { DriverPage } from './components/pages/DriverPage';
 import { FinancePage } from './components/pages/FinancePage';
+import { ManagementPage } from './components/pages/ManagementPage';
 import { ProductionPage } from './components/pages/ProductionPage';
 import { ProductPhotosPage } from './components/pages/ProductPhotosPage';
-import { ReportsPage } from './components/pages/ReportsPage';
 import { SalesPage } from './components/pages/SalesPage';
 import { ShippingPage } from './components/pages/ShippingPage';
 import { useAccessControl } from './hooks/useAccessControl';
@@ -85,6 +85,7 @@ export default function App() {
     rejectDriverDocumentsInFinance,
     createOrder,
     resubmitOrderToProduction,
+    approveManagementOrder,
     returnOrderToSales,
     resetDemoData,
   } = useOrderStore();
@@ -226,12 +227,33 @@ export default function App() {
       if (activePage === 'driver' && order.status !== 'delivered') {
         continue;
       }
+      if (
+        activePage === 'production' &&
+        order.status === 'pending_management_approval'
+      ) {
+        continue;
+      }
+      if (activePage === 'management') {
+        const standing = order.customerStanding ?? 'green';
+        const isMgmtOrder =
+          order.status === 'pending_management_approval' ||
+          Boolean(order.managementApproval?.approved) ||
+          standing === 'yellow' ||
+          standing === 'red' ||
+          standing === 'black';
+        if (!isMgmtOrder) continue;
+      }
       const key = order.deliveryDate;
       if (!map[key]) {
         map[key] = { totalCount: 0, unseenCount: 0 };
       }
       map[key].totalCount += 1;
-      if (activeWorkflowDept && !order.seenByDept[deptForSeen]) {
+      if (
+        activePage === 'management' &&
+        order.status === 'pending_management_approval'
+      ) {
+        map[key].unseenCount += 1;
+      } else if (activeWorkflowDept && !order.seenByDept[deptForSeen]) {
         map[key].unseenCount += 1;
       }
     }
@@ -289,6 +311,7 @@ export default function App() {
     setActivePage(page);
     if (
       page === 'sales' ||
+      page === 'management' ||
       page === 'production' ||
       page === 'finance' ||
       page === 'shipping'
@@ -346,6 +369,7 @@ export default function App() {
 
   const unreadCounts: Record<NotificationDepartment, number> = {
     sales: unreadByDept.sales.length,
+    management: unreadByDept.management.length,
     production: unreadByDept.production.length,
     finance: unreadByDept.finance.length,
     shipping: unreadByDept.shipping.length,
@@ -389,6 +413,22 @@ export default function App() {
               }
               onEditReturnedOrder={(order) =>
                 setInvoiceModalState({ open: true, editingOrder: order })
+              }
+              onCallCustomer={handleCallCustomer}
+            />
+          )}
+
+          {activePage === 'management' && (
+            <ManagementPage
+              orders={dayOrders}
+              customers={customers}
+              printingOrderId={printingOrderId}
+              access={FULL_ACCESS}
+              onPrintAll={handlePrintAll}
+              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+              onApproveOrder={approveManagementOrder}
+              onOpenReturnToSales={(order) =>
+                setReturnToSalesTarget({ order, source: 'management' })
               }
               onCallCustomer={handleCallCustomer}
             />
@@ -439,14 +479,6 @@ export default function App() {
               onOpenReturnToSales={(order) =>
                 setReturnToSalesTarget({ order, source: 'driver' })
               }
-            />
-          )}
-
-          {activePage === 'reports' && (
-            <ReportsPage
-              orders={dayOrders}
-              access={FULL_ACCESS}
-              onPrintAll={handlePrintAll}
             />
           )}
 
@@ -584,17 +616,26 @@ export default function App() {
       {/* Toasts */}
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      {/* Main Order Detail & Action Popup Modal (Sales / Production / Finance / Shipping) */}
-      {(activePage === 'sales' || activeWorkflowDept !== null) && (
+      {/* Main Order Detail & Action Popup Modal (Sales / Management / Production / Finance / Shipping) */}
+      {(activePage === 'sales' ||
+        activePage === 'management' ||
+        activeWorkflowDept !== null) && (
         <OrderDetailModal
           order={selectedOrder}
-          department={activePage === 'sales' ? 'sales' : activeWorkflowDept!}
+          department={
+            activePage === 'sales'
+              ? 'sales'
+              : activePage === 'management'
+                ? 'management'
+                : activeWorkflowDept!
+          }
           access={FULL_ACCESS}
           disableEscape={hasSubModalOpen}
           onClose={() => setSelectedOrderId(null)}
           onPrintSingle={handlePrintSingle}
           onOpenWeight={(order, item) => setWeightTarget({ order, item })}
           onCompleteProduction={completeProduction}
+          onApproveManagement={approveManagementOrder}
           onApproveFinance={approveFinance}
           onVerifyDriverDocuments={verifyDriverDocumentsInFinance}
           onOpenRejectDriverDocs={(order) => setRejectDriverDocsOrder(order)}

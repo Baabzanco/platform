@@ -15,10 +15,42 @@ import {
   DELIVERY_SLOTS,
   PRODUCT_CATALOG,
 } from '../../data/initialOrders';
-import { CustomerRecord } from '../../types/customer';
+import { CustomerRecord, CustomerStandingTier } from '../../types/customer';
 import { CreateOrderInput, Order } from '../../types/order';
 import { formatRial, formatWeight } from '../../utils/formatters';
 import { CalendarDayInfo, toPersianDigits } from '../../utils/jalaliCalendar';
+
+const STANDING_OPTIONS: Array<{
+  id: CustomerStandingTier;
+  label: string;
+  activeClass: string;
+  dotClass: string;
+}> = [
+  {
+    id: 'green',
+    label: 'سبز (نقدی / فعال)',
+    activeClass: 'bg-emerald-50 border-emerald-500 text-emerald-900',
+    dotClass: 'bg-emerald-500',
+  },
+  {
+    id: 'yellow',
+    label: 'زرد (نزدیک سقف)',
+    activeClass: 'bg-amber-50 border-amber-500 text-amber-950',
+    dotClass: 'bg-amber-500',
+  },
+  {
+    id: 'red',
+    label: 'قرمز (اتمام اعتبار)',
+    activeClass: 'bg-red-50 border-red-500 text-red-900',
+    dotClass: 'bg-red-600',
+  },
+  {
+    id: 'black',
+    label: 'مشکی (بلک‌لیست)',
+    activeClass: 'bg-slate-900 border-slate-900 text-white',
+    dotClass: 'bg-white',
+  },
+];
 
 interface InvoiceDraftRow {
   rowId: string;
@@ -63,6 +95,9 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerStanding, setCustomerStanding] =
+    useState<CustomerStandingTier>('green');
+  const [customerStandingLabel, setCustomerStandingLabel] = useState('');
   const [district, setDistrict] = useState('');
   const [address, setAddress] = useState('');
   const [deliveryDate, setDeliveryDate] = useState(defaultDateKey);
@@ -75,9 +110,11 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     if (!open) return;
 
     if (editingOrder) {
-      setSelectedCustomerId('');
+      setSelectedCustomerId(editingOrder.customerId ?? '');
       setCustomerName(editingOrder.customerName);
       setCustomerPhone(editingOrder.customerPhone);
+      setCustomerStanding(editingOrder.customerStanding ?? 'green');
+      setCustomerStandingLabel(editingOrder.customerStandingLabel ?? '');
       setDistrict(editingOrder.district);
       setAddress(editingOrder.address);
       setDeliveryDate(editingOrder.deliveryDate || defaultDateKey);
@@ -102,6 +139,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
       setSelectedCustomerId('');
       setCustomerName('');
       setCustomerPhone('');
+      setCustomerStanding('green');
+      setCustomerStandingLabel('');
       setDistrict('');
       setAddress('');
       setDeliveryDate(defaultDateKey);
@@ -171,6 +210,8 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     const primaryPhone = found.contacts[0]?.phone ?? '';
     setCustomerName(fullLabel);
     setCustomerPhone(primaryPhone);
+    setCustomerStanding(found.standing);
+    setCustomerStandingLabel(found.financialStatusLabel);
     setDistrict(found.mainBranch || found.city || 'تهران');
     setAddress(found.address || '');
   };
@@ -268,8 +309,11 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
     }
 
     const payload: CreateOrderInput = {
+      customerId: selectedCustomerId || editingOrder?.customerId || undefined,
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
+      customerStanding,
+      customerStandingLabel: customerStandingLabel.trim() || undefined,
       district: district.trim() || 'تهران',
       address: address.trim(),
       deliveryDate,
@@ -287,6 +331,10 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
   };
 
   const isEditing = editingOrder !== null;
+  const requiresManagementApproval =
+    customerStanding === 'yellow' ||
+    customerStanding === 'red' ||
+    customerStanding === 'black';
 
   return (
     <div
@@ -313,11 +361,13 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
             <div className="min-w-0">
               <h2 className="text-[15px] sm:text-base font-bold text-slate-900 truncate">
                 {isEditing
-                  ? `اصلاح فاکتور سفارش ${editingOrder.code} و ارسال مجدد به تولید`
-                  : 'ثبت فاکتور جدید (ارسال به بخش تولید)'}
+                  ? `اصلاح فاکتور سفارش ${editingOrder.code}`
+                  : 'ثبت فاکتور جدید'}
               </h2>
               <p className="text-[11px] sm:text-xs text-slate-500">
-                پس از ثبت نهایی، سفارش بلافاصله در صف آماده‌سازی و توزین بخش تولید قرار می‌گیرد.
+                {requiresManagementApproval
+                  ? 'به‌دلیل وضعیت اعتباری مشتری، این سفارش ابتدا به صفحه مدیریت ارسال و پس از تایید وارد صف تولید می‌شود.'
+                  : 'پس از ثبت نهایی، سفارش بلافاصله در صف آماده‌سازی و توزین بخش تولید قرار می‌گیرد.'}
               </p>
             </div>
           </div>
@@ -388,22 +438,74 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
               </div>
             )}
 
-            {selectedCustomerRecord &&
-              (selectedCustomerRecord.standing === 'red' ||
-                selectedCustomerRecord.standing === 'black') && (
-                <div className="px-3.5 py-2.5 rounded-lg bg-red-50 border border-red-200 text-red-900 text-xs flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <span>
-                    توجه: وضعیت اعتباری این طرف حساب{' '}
-                    <strong>{selectedCustomerRecord.financialStatusLabel}</strong> است.
-                    {selectedCustomerRecord.credit.blacklistReason
-                      ? ` (${selectedCustomerRecord.credit.blacklistReason})`
-                      : selectedCustomerRecord.credit.warningReason
-                        ? ` (${selectedCustomerRecord.credit.warningReason})`
-                        : ''}
-                  </span>
-                </div>
-              )}
+            {/* Credit Standing Selector (Auto-filled from Customer Picker or Set Manually) */}
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-semibold text-slate-600">
+                وضعیت اعتباری مشتری
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {STANDING_OPTIONS.map((opt) => {
+                  const active = customerStanding === opt.id;
+                  return (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => {
+                        setCustomerStanding(opt.id);
+                        if (selectedCustomerRecord?.standing !== opt.id) {
+                          setCustomerStandingLabel('');
+                        }
+                      }}
+                      className={`min-h-[38px] px-2.5 py-1.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-colors ${
+                        active
+                          ? opt.activeClass
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          active ? opt.dotClass : 'bg-slate-300'
+                        }`}
+                      />
+                      <span className="truncate">{opt.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {requiresManagementApproval && (
+              <div
+                className={`px-3.5 py-2.5 rounded-lg border text-xs flex items-start gap-2 leading-relaxed ${
+                  customerStanding === 'yellow'
+                    ? 'bg-amber-50 border-amber-300 text-amber-950'
+                    : 'bg-red-50 border-red-200 text-red-900'
+                }`}
+              >
+                <AlertTriangle
+                  className={`w-4 h-4 shrink-0 mt-0.5 ${
+                    customerStanding === 'yellow'
+                      ? 'text-amber-600'
+                      : 'text-red-600'
+                  }`}
+                />
+                <span>
+                  <strong>ارسال به صف تایید مدیریت:</strong> به‌دلیل وضعیت اعتباری{' '}
+                  <strong>
+                    {customerStanding === 'yellow'
+                      ? 'زرد'
+                      : customerStanding === 'red'
+                        ? 'قرمز'
+                        : 'بلک‌لیست'}
+                  </strong>
+                  {selectedCustomerRecord
+                    ? ` (${selectedCustomerRecord.financialStatusLabel})`
+                    : ''}
+                  ، این سفارش پس از ثبت ابتدا به صفحه <strong>مدیریت</strong> ارسال می‌شود و تنها پس از تایید مدیریت به بخش تولید خواهد رفت.
+                </span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -728,12 +830,20 @@ export const NewInvoiceModal: React.FC<NewInvoiceModalProps> = ({
           <button
             type="submit"
             form="new-invoice-form"
-            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-[#0f5864] rounded-xl sm:rounded-lg hover:bg-[#0b434d] transition-colors whitespace-nowrap"
+            className={`w-full sm:w-auto min-h-[48px] sm:min-h-0 inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white rounded-xl sm:rounded-lg transition-colors whitespace-nowrap ${
+              requiresManagementApproval
+                ? 'bg-amber-600 hover:bg-amber-700'
+                : 'bg-[#0f5864] hover:bg-[#0b434d]'
+            }`}
           >
             <Send className="w-4 h-4 shrink-0" />
-            {isEditing
-              ? 'ذخیره اصلاحات و ارسال مجدد به تولید'
-              : 'ثبت فاکتور و ارسال به تولید'}
+            {requiresManagementApproval
+              ? isEditing
+                ? 'ذخیره اصلاحات و ارسال به تایید مدیریت'
+                : 'ثبت فاکتور و ارسال به تایید مدیریت'
+              : isEditing
+                ? 'ذخیره اصلاحات و ارسال مجدد به تولید'
+                : 'ثبت فاکتور و ارسال به تولید'}
           </button>
         </div>
       </div>

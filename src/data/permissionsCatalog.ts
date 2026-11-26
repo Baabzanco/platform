@@ -14,7 +14,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
     id: 'orders',
     title: 'سفارشات',
     description:
-      'تمامی صفحات، فیلدهای نمایشی، وزن‌ها، مبالغ، مدارک رانندگان و عملیات واحدهای تولید، صدور فاکتور، ارسال و گزارش‌ها در این کتگوری قرار دارند.',
+      'تمامی صفحات، فیلدهای نمایشی، وزن‌ها، مبالغ، مدارک رانندگان و عملیات واحدهای فروش، مدیریت، تولید، صدور فاکتور و ارسال در این کتگوری قرار دارند.',
     subgroups: [
       {
         id: 'sections',
@@ -32,6 +32,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             label: 'صفحه بخش کارشناس فروش',
             description:
               'مشاهده فهرست سفارشات با تمام جزئیات، ثبت فاکتور جدید و رسیدگی به سفارش‌های برگشت‌خورده به فروش',
+          },
+          {
+            key: 'section_management',
+            label: 'صفحه بخش مدیریت (تایید اعتبار)',
+            description:
+              'بررسی و تایید سفارش مشتریان با وضعیت اعتباری زرد و قرمز پیش از ورود به صف تولید',
           },
           {
             key: 'section_production',
@@ -60,12 +66,6 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             label: 'صفحه پنل رانندگان',
             description:
               'لیست مسیر رانندگان، تماس با مشتری و ثبت مدارک تحویل',
-          },
-          {
-            key: 'section_reports',
-            label: 'صفحه گزارش‌ها و آمار زنده',
-            description:
-              'کارت‌های آماری، نمودار وضعیت و جدول جامع رهگیری سفارش‌ها',
           },
           {
             key: 'section_access_control',
@@ -101,7 +101,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             key: 'field_customer_name',
             label: 'نام طرف حساب / مشتری',
             description:
-              'نمایش نام مجموعه یا شخص خریدار در صدور فاکتور و گزارش‌ها',
+              'نمایش نام مجموعه یا شخص خریدار در بخش‌های فروش، مدیریت و صدور فاکتور',
           },
           {
             key: 'field_customer_phone',
@@ -169,7 +169,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             key: 'field_returned_weight',
             label: 'مقدار و وزن مرجوعی',
             description:
-              'نمایش اقلام و وزن‌های برگشت‌خورده در بخش‌ها و گزارش‌ها',
+              'نمایش اقلام و وزن‌های برگشت‌خورده در بخش‌های عملیاتی سفارش',
           },
           {
             key: 'field_unit_price',
@@ -185,7 +185,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             key: 'field_order_total',
             label: 'مبلغ کل فاکتور و مانده خالص',
             description:
-              'جمع کل فاکتور، کسر مرجوعی و آمار ریالی در صدور فاکتور و گزارش‌ها',
+              'جمع کل فاکتور، کسر مرجوعی و مبالغ ریالی در بخش‌های فروش، مدیریت و صدور فاکتور',
           },
         ],
       },
@@ -200,6 +200,12 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
             label: 'ثبت فاکتور جدید و ارسال به تولید',
             description:
               'ایجاد سفارش و فاکتور جدید توسط کارشناس فروش و ارسال مستقیم آن به صف تولید',
+          },
+          {
+            key: 'action_management_approve',
+            label: 'تایید اعتباری مدیریت و ارسال به تولید',
+            description:
+              'تایید سفارش مشتریان با وضعیت اعتباری زرد یا قرمز در صفحه مدیریت جهت ورود به صف تولید',
           },
           {
             key: 'action_return_to_sales',
@@ -327,7 +333,7 @@ export const PERMISSION_CATEGORIES: PermissionCategory[] = [
           },
           {
             key: 'action_print',
-            label: 'پرینت سفارش‌ها و گزارش‌ها',
+            label: 'پرینت سفارش‌ها',
             description: 'مشاهده و استفاده از دکمه‌های پرینت تکی و پرینت گروهی',
           },
           {
@@ -575,6 +581,36 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
     });
   }
 
+  if (preset === 'management_role') {
+    return createPermissionMap({
+      section_calendar: { view: true, edit: true },
+      section_sales: { view: true, edit: false },
+      section_management: { view: true, edit: true },
+      field_order_code: { view: true, edit: false },
+      field_delivery_slot: { view: true, edit: false },
+      field_order_status: { view: true, edit: false },
+      field_customer_name: { view: true, edit: false },
+      field_customer_phone: { view: true, edit: true },
+      field_district: { view: true, edit: false },
+      field_address: { view: true, edit: false },
+      field_notes: { view: true, edit: false },
+      field_product_name: { view: true, edit: false },
+      field_requested_weight: { view: true, edit: false },
+      field_unit_price: { view: true, edit: false },
+      field_item_total: { view: true, edit: false },
+      field_order_total: { view: true, edit: false },
+      action_management_approve: { view: true, edit: true },
+      action_return_to_sales: { view: true, edit: true },
+      action_print: { view: true, edit: true },
+      section_customers_list: { view: true, edit: false },
+      section_customer_profile: { view: true, edit: true },
+      field_customer_financial_standing: { view: true, edit: true },
+      section_customer_accounting: { view: true, edit: false },
+      section_product_photos: { view: true, edit: false },
+      section_training_videos: { view: true, edit: false },
+    });
+  }
+
   if (preset === 'production_operator') {
     return createPermissionMap({
       // Orders
@@ -610,7 +646,6 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
       // Orders
       section_calendar: { view: true, edit: true },
       section_finance: { view: true, edit: true },
-      section_reports: { view: true, edit: false },
       field_order_code: { view: true, edit: false },
       field_delivery_slot: { view: true, edit: false },
       field_order_status: { view: true, edit: false },
@@ -709,6 +744,7 @@ export function buildPresetPermissions(preset: AccessPresetId): PermissionMap {
 export const ACCESS_PRESET_LABELS: Record<AccessPresetId, string> = {
   admin_full: 'دسترسی کامل (مدیران سیستم)',
   sales_specialist: 'الگوی گروه کارشناسان فروش',
+  management_role: 'الگوی گروه مدیریت (تایید اعتباری)',
   production_operator: 'الگوی گروه تولید',
   finance_specialist: 'الگوی گروه صدور فاکتور',
   shipping_coordinator: 'الگوی گروه ارسال',
@@ -731,6 +767,13 @@ export const INITIAL_USER_GROUPS: UserGroup[] = [
     description:
       'دسترسی به صفحه کارشناس فروش، مشاهده کامل جزئیات سفارشات، ثبت فاکتور جدید و پیگیری مشتریان',
     permissions: buildPresetPermissions('sales_specialist'),
+  },
+  {
+    id: 'group-management',
+    name: 'گروه مدیریت (تایید اعتبار)',
+    description:
+      'بررسی وضعیت اعتباری مشتریان زرد و قرمز، تایید سفارش جهت ارسال به تولید یا برگشت به فروش',
+    permissions: buildPresetPermissions('management_role'),
   },
   {
     id: 'group-production',
