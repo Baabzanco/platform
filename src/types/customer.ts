@@ -4,16 +4,7 @@ export type CustomerPaymentMode = 'cash' | 'credit';
 
 export type CustomerRelationshipType = 'customer' | 'lead';
 
-export type CustomerProfileTab =
-  | 'basic'
-  | 'specialized'
-  | 'events'
-  | 'accounting'
-  | 'menu_images'
-  | 'marketer'
-  | 'products'
-  | 'calls'
-  | 'messages';
+export type CustomerProfileTab = 'basic' | 'accounting' | 'marketer';
 
 export type AccountingRowKind = 'debit' | 'credit' | 'balance';
 

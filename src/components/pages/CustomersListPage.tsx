@@ -431,8 +431,8 @@ export const CustomersListPage: React.FC<CustomersListPageProps> = ({
 
       {/* Main List Surface (Desktop Column Grid + Color-Coded Cards / Mobile Cards) */}
       <section className="bg-white border border-slate-200 rounded-xl p-2.5 sm:p-3.5 shadow-2xs">
-        {/* Desktop Column Headers (matching Screenshot 1 column order RTL) */}
-        <div className="hidden lg:grid lg:grid-cols-[48px_minmax(220px,2.2fr)_minmax(115px,1fr)_82px_minmax(110px,1fr)_minmax(125px,1.1fr)_minmax(160px,1.35fr)_96px_126px] items-center gap-2 px-3 py-2.5 text-xs font-bold text-slate-600 border-b border-slate-200 mb-2">
+        {/* Desktop & Tablet Landscape Column Headers */}
+        <div className="hidden lg:grid lg:grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_82px_116px] xl:grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_72px_minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1.4fr)_86px_118px] items-center gap-2 px-3 py-2.5 text-xs font-bold text-slate-600 border-b border-slate-200 mb-2">
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -443,12 +443,12 @@ export const CustomersListPage: React.FC<CustomersListPageProps> = ({
             />
             <span>#</span>
           </div>
-          <div>طرف حساب</div>
-          <div>نام مسئول</div>
-          <div>نوع طرف حساب</div>
-          <div>کارشناس فروش</div>
-          <div>کارشناس CRM</div>
-          <div>وضعیت مالی</div>
+          <div className="min-w-0">طرف حساب</div>
+          <div className="min-w-0">نام مسئول</div>
+          <div className="hidden xl:block">نوع طرف حساب</div>
+          <div className="min-w-0">کارشناس فروش</div>
+          <div className="hidden xl:block min-w-0">کارشناس CRM</div>
+          <div className="min-w-0">وضعیت مالی</div>
           <div className="text-center">وضعیت</div>
           <div className="text-center">عملیات</div>
         </div>
@@ -484,10 +484,10 @@ export const CustomersListPage: React.FC<CustomersListPageProps> = ({
                 <article
                   key={customer.id}
                   onClick={() => onSelectCustomer(customer.id)}
-                  className={`rounded-xl lg:rounded-lg transition-all cursor-pointer ${tierStyle.rowCardClass}`}
+                  className={`rounded-xl lg:rounded-lg transition-all cursor-pointer overflow-hidden ${tierStyle.rowCardClass}`}
                 >
-                  {/* Desktop Row Layout (matches Screenshot 1) */}
-                  <div className="hidden lg:grid lg:grid-cols-[48px_minmax(220px,2.2fr)_minmax(115px,1fr)_82px_minmax(110px,1fr)_minmax(125px,1.1fr)_minmax(160px,1.35fr)_96px_126px] items-center gap-2 px-3 py-2.5 text-[13px]">
+                  {/* Desktop & Tablet Landscape Row Layout */}
+                  <div className="hidden lg:grid lg:grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.4fr)_82px_116px] xl:grid-cols-[44px_minmax(0,2.2fr)_minmax(0,1fr)_72px_minmax(0,1fr)_minmax(0,1.05fr)_minmax(0,1.4fr)_86px_118px] items-center gap-2 px-3 py-2.5 text-[13px] w-full">
                     <div
                       className="flex items-center gap-2 tabular-nums font-semibold"
                       onClick={(e) => e.stopPropagation()}
@@ -512,26 +512,27 @@ export const CustomersListPage: React.FC<CustomersListPageProps> = ({
                         {customer.name}
                       </div>
                       <div
-                        className={`text-[11px] tabular-nums mt-0.5 ${tierStyle.rowMutedClass}`}
+                        className={`text-[11px] tabular-nums mt-0.5 truncate ${tierStyle.rowMutedClass}`}
                       >
                         کد حساب: {toPersianDigits(customer.accountCode)} ·{' '}
+                        <span className="xl:hidden">{relLabel} · </span>
                         {customer.businessType}
                       </div>
                     </div>
 
-                    <div className={`truncate text-xs font-medium ${tierStyle.rowTextClass}`}>
+                    <div className={`min-w-0 truncate text-xs font-medium ${tierStyle.rowTextClass}`}>
                       {customer.managerName || '—'}
                     </div>
 
-                    <div className={`text-xs font-semibold ${tierStyle.rowTextClass}`}>
+                    <div className={`hidden xl:block text-xs font-semibold ${tierStyle.rowTextClass}`}>
                       {relLabel}
                     </div>
 
-                    <div className={`truncate text-xs font-medium ${tierStyle.rowTextClass}`}>
+                    <div className={`min-w-0 truncate text-xs font-medium ${tierStyle.rowTextClass}`}>
                       {customer.salesRep || '—'}
                     </div>
 
-                    <div className={`truncate text-xs font-medium ${tierStyle.rowTextClass}`}>
+                    <div className={`hidden xl:block min-w-0 truncate text-xs font-medium ${tierStyle.rowTextClass}`}>
                       {customer.crmRep || '—'}
                     </div>
 
@@ -544,22 +545,22 @@ export const CustomersListPage: React.FC<CustomersListPageProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex justify-center">
+                    <div className="flex justify-center min-w-0">
                       <span
-                        className={`inline-flex items-center justify-center min-w-[74px] px-2.5 py-1 rounded-md text-[11px] font-bold whitespace-nowrap ${tierStyle.rowBadgeClass}`}
+                        className={`inline-flex items-center justify-center min-w-[70px] px-2 py-1 rounded-md text-[11px] font-bold whitespace-nowrap ${tierStyle.rowBadgeClass}`}
                       >
                         {statusLabel}
                       </span>
                     </div>
 
-                    <div className="flex justify-center">
+                    <div className="flex justify-center min-w-0">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           onSelectCustomer(customer.id);
                         }}
-                        className={`w-full py-2 px-3 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${tierStyle.rowButtonClass}`}
+                        className={`w-full py-2 px-2.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap ${tierStyle.rowButtonClass}`}
                       >
                         مشاهده پروفایل
                       </button>

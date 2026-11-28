@@ -7,26 +7,20 @@ import {
   Briefcase,
   Building2,
   Calculator,
-  CalendarClock,
   CheckCircle2,
   Clock,
   ExternalLink,
   FileCheck2,
   FileSpreadsheet,
   FileText,
-  Image as ImageIcon,
   Info,
   Lock,
-  MessageCircle,
-  MessageSquare,
-  Package,
   Phone,
   PhoneCall,
   Plus,
   Search,
   Send,
   ShieldAlert,
-  SlidersHorizontal,
   Unlock,
   UserCheck,
   UserPlus,
@@ -55,7 +49,7 @@ import {
   CustomerStandingTier,
 } from '../../types/customer';
 import { Order } from '../../types/order';
-import { formatRial, formatWeight } from '../../utils/formatters';
+import { formatRial } from '../../utils/formatters';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
 import { AccountingEntryDetailModal } from '../modals/AccountingEntryDetailModal';
 
@@ -101,14 +95,8 @@ const PROFILE_TABS: Array<{
   icon: React.FC<{ className?: string }>;
 }> = [
   { id: 'basic', label: 'اطلاعات پایه', icon: Info },
-  { id: 'specialized', label: 'اطلاعات تخصصی', icon: SlidersHorizontal },
-  { id: 'events', label: 'رخداد مشتری', icon: CalendarClock },
   { id: 'accounting', label: 'رخداد حسابداری', icon: FileSpreadsheet },
-  { id: 'menu_images', label: 'تصاویر منو', icon: ImageIcon },
   { id: 'marketer', label: 'بازاریاب', icon: Briefcase },
-  { id: 'products', label: 'محصولات', icon: Package },
-  { id: 'calls', label: 'تماس‌ها', icon: Phone },
-  { id: 'messages', label: 'پیام‌ها', icon: MessageSquare },
 ];
 
 export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
@@ -197,12 +185,6 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
   const [contactName, setContactName] = useState('');
   const [contactRole, setContactRole] = useState('');
   const [contactPhone, setContactPhone] = useState('');
-
-  // Inline Forms in Tabs (Events, Calls, SMS)
-  const [newEventTitle, setNewEventTitle] = useState('');
-  const [newEventDesc, setNewEventDesc] = useState('');
-  const [newCallSummary, setNewCallSummary] = useState('');
-  const [newSmsInput, setNewSmsInput] = useState('');
 
   // Sync local form state whenever switched to a different customer
   useEffect(() => {
@@ -1111,18 +1093,6 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                             >
                               <Phone className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setActiveTab('messages');
-                                setNewSmsInput(`با سلام خدمت ${cnt.name}، `);
-                              }}
-                              title="ارسال پیامک"
-                              aria-label={`ارسال پیامک به ${cnt.name}`}
-                              className="w-7 h-7 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                            </button>
                           </div>
                         </div>
 
@@ -1158,195 +1128,7 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
             </>
           )}
 
-          {/* TAB 2: اطلاعات تخصصی و اعتبار */}
-          {activeTab === 'specialized' && (
-            <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-5 text-xs">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900">
-                    اطلاعات مالی، اعتباری و تخصصی
-                  </h2>
-                  <p className="text-slate-500 mt-0.5">
-                    بررسی دقیق سقف اعتبار ریالی، مهلت زمانی و مشخصات ثبتی طرف حساب
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setFinancialModalOpen(true)}
-                  className="px-3.5 py-2 rounded-lg bg-[#0f5864] text-white font-bold hover:bg-[#0b434d]"
-                >
-                  تنظیم / تغییر وضعیت اعتباری
-                </button>
-              </div>
-
-              {customer.credit.paymentMode === 'credit' &&
-              customer.credit.creditLimitRial > 0 ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="block text-[11px] text-slate-500 mb-1">
-                        سقف اعتبار مصوب
-                      </span>
-                      <span className="tabular-nums text-sm font-bold text-slate-900">
-                        {formatRial(customer.credit.creditLimitRial)}
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="block text-[11px] text-slate-500 mb-1">
-                        اعتبار مصرف‌شده
-                      </span>
-                      <span className="tabular-nums text-sm font-bold text-slate-900">
-                        {formatRial(customer.credit.usedCreditRial)} (
-                        {toPersianDigits(creditUsagePercent)}٪)
-                      </span>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
-                      <span className="block text-[11px] text-slate-500 mb-1">
-                        مانده اعتبار قابل خرید
-                      </span>
-                      <span className="tabular-nums text-sm font-bold text-[#0f5864]">
-                        {formatRial(remainingCreditRial)}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Utilization Bar */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 tabular-nums">
-                      <span>میزان مصرف سقف اعتبار</span>
-                      <span>{toPersianDigits(creditUsagePercent)}٪</span>
-                    </div>
-                    <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                      <div
-                        className={`h-full transition-all ${
-                          customer.standing === 'black'
-                            ? 'bg-neutral-900'
-                            : customer.standing === 'red'
-                              ? 'bg-red-600'
-                              : customer.standing === 'yellow'
-                                ? 'bg-amber-500'
-                                : 'bg-emerald-600'
-                        }`}
-                        style={{
-                          width: `${Math.min(100, Math.max(4, creditUsagePercent))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-950 font-semibold">
-                  این طرف حساب در گروه <strong>مشتریان نقدی</strong> قرار دارد و
-                  تمامی سفارش‌ها با تسویه نقدی در محل بدون نیاز به سقف اعتبار
-                  انجام می‌شوند.
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="block text-[11px] text-slate-500 mb-0.5">
-                    کد اقتصادی
-                  </span>
-                  <span className="tabular-nums font-bold text-slate-900">
-                    {customer.economicCode}
-                  </span>
-                </div>
-                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="block text-[11px] text-slate-500 mb-0.5">
-                    شناسه ملی
-                  </span>
-                  <span className="tabular-nums font-bold text-slate-900">
-                    {customer.nationalId}
-                  </span>
-                </div>
-                <div className="sm:col-span-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
-                  <span className="block text-[11px] text-slate-500 mb-0.5">
-                    نشانی دقیق تحویل و مکاتبات
-                  </span>
-                  <span className="font-semibold text-slate-900 leading-relaxed">
-                    {customer.address}
-                  </span>
-                </div>
-              </div>
-            </section>
-          )}
-
-          {/* TAB 3: رخداد مشتری */}
-          {activeTab === 'events' && (
-            <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newEventTitle.trim()) return;
-                  onAddEvent(customer.id, {
-                    title: newEventTitle.trim(),
-                    description: newEventDesc.trim() || 'ثبت رخداد در پروفایل',
-                    type: 'followup',
-                  });
-                  setNewEventTitle('');
-                  setNewEventDesc('');
-                  onNotify(
-                    'رخداد ثبت شد',
-                    'رخداد جدید به تاریخچه پرونده مشتری اضافه گردید.',
-                    'رخداد مشتری',
-                    'success'
-                  );
-                }}
-                className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5"
-              >
-                <div className="font-bold text-slate-800">ثبت رخداد جدید</div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    required
-                    value={newEventTitle}
-                    onChange={(e) => setNewEventTitle(e.target.value)}
-                    placeholder="عنوان رخداد (مثلاً: جلسه حضوری، وعده تسویه...)"
-                    className="h-9 px-3 rounded-lg border border-slate-300 bg-white"
-                  />
-                  <input
-                    type="text"
-                    value={newEventDesc}
-                    onChange={(e) => setNewEventDesc(e.target.value)}
-                    placeholder="توضیحات تکمیلی..."
-                    className="h-9 px-3 rounded-lg border border-slate-300 bg-white"
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    className="px-4 py-1.5 rounded-lg bg-[#0f5864] text-white font-bold hover:bg-[#0b434d]"
-                  >
-                    افزودن رخداد
-                  </button>
-                </div>
-              </form>
-
-              {customer.events.length === 0 ? (
-                <p className="text-center py-6 text-slate-500">
-                  رخدادی برای این مشتری ثبت نشده است.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {customer.events.map((ev) => (
-                    <div key={ev.id} className="py-3 space-y-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <strong className="text-slate-900">{ev.title}</strong>
-                        <span className="tabular-nums text-[11px] text-slate-500">
-                          {ev.date} · {ev.by}
-                        </span>
-                      </div>
-                      <p className="text-slate-600 leading-relaxed">
-                        {ev.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* TAB 3B: رخداد حسابداری (Read-Only Excel-Style Ledger) */}
+          {/* TAB 2: رخداد حسابداری (Read-Only Excel-Style Ledger) */}
           {activeTab === 'accounting' && (
             <section className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
               {/* Top Excel Toolbar Header */}
@@ -1595,42 +1377,7 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
             </section>
           )}
 
-          {/* TAB 4: تصاویر منو */}
-          {activeTab === 'menu_images' && (
-            <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-3 text-xs">
-              <h2 className="text-sm font-bold text-slate-900">
-                منوها و اقلام مصرفی مجموعه
-              </h2>
-              {customer.menus.length === 0 ? (
-                <p className="text-center py-8 text-slate-500">
-                  هنوز تصویر یا فایل منویی برای این طرف حساب بارگذاری نشده است.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {customer.menus.map((menu) => (
-                    <div
-                      key={menu.id}
-                      className="rounded-xl overflow-hidden border border-slate-200"
-                    >
-                      <div
-                        className={`h-28 bg-gradient-to-l ${menu.accentColor} p-4 flex flex-col justify-between text-white`}
-                      >
-                        <span className="text-[11px] opacity-90">
-                          به‌روزرسانی: {menu.updatedAt}
-                        </span>
-                        <h3 className="text-sm font-bold">{menu.title}</h3>
-                      </div>
-                      <div className="p-3.5 bg-white text-slate-700 leading-relaxed">
-                        {menu.itemsSummary}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* TAB 5: بازاریاب */}
+          {/* TAB 3: بازاریاب */}
           {activeTab === 'marketer' && (
             <section className="bg-white border border-slate-200 rounded-xl p-5 grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
@@ -1651,172 +1398,6 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                   پیگیری بعدی: {customer.followUpTargetDate}
                 </div>
               </div>
-            </section>
-          )}
-
-          {/* TAB 6: محصولات */}
-          {activeTab === 'products' && (
-            <section className="bg-white border border-slate-200 rounded-xl overflow-hidden text-xs">
-              {customer.products.length === 0 ? (
-                <div className="p-8 text-center text-slate-500">
-                  فهرست محصولات پرتکرار برای این طرف حساب ثبت نشده است.
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                        <th className="text-right px-4 py-2.5">نام محصول</th>
-                        <th className="text-right px-4 py-2.5">میانگین هفتگی</th>
-                        <th className="text-right px-4 py-2.5">قیمت توافقی</th>
-                        <th className="text-right px-4 py-2.5">آخرین خرید</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {customer.products.map((pr) => (
-                        <tr key={pr.id}>
-                          <td className="px-4 py-3 font-bold text-slate-900">
-                            {pr.productName}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums">
-                            {formatWeight(pr.avgWeeklyKg)}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums font-semibold text-[#0f5864]">
-                            {formatRial(pr.agreedPriceRial)}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums text-slate-500">
-                            {pr.lastOrderDate}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* TAB 7: تماس‌ها */}
-          {activeTab === 'calls' && (
-            <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newCallSummary.trim()) return;
-                  onAddCallLog(customer.id, {
-                    duration: '۰۲:۳۰',
-                    direction: 'outgoing',
-                    summary: newCallSummary.trim(),
-                  });
-                  setNewCallSummary('');
-                  onNotify(
-                    'گزارش تماس ثبت شد',
-                    'گزارش مکالمه جدید در پرونده مشتری ذخیره شد.',
-                    'تماس‌ها',
-                    'success'
-                  );
-                }}
-                className="flex flex-col sm:flex-row gap-2"
-              >
-                <input
-                  type="text"
-                  value={newCallSummary}
-                  onChange={(e) => setNewCallSummary(e.target.value)}
-                  placeholder="خلاصه تماس جدید را بنویسید..."
-                  className="flex-1 h-10 px-3 rounded-lg border border-slate-300"
-                />
-                <button
-                  type="submit"
-                  className="h-10 px-4 rounded-lg bg-[#0f5864] text-white font-bold whitespace-nowrap"
-                >
-                  ثبت تماس
-                </button>
-              </form>
-
-              {customer.calls.length === 0 ? (
-                <p className="text-center py-6 text-slate-500">
-                  تماسی ثبت نشده است.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {customer.calls.map((c) => (
-                    <div
-                      key={c.id}
-                      className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                    >
-                      <div className="space-y-0.5">
-                        <div className="font-bold text-slate-900">
-                          {c.summary}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          کارشناس: {c.repName}
-                        </div>
-                      </div>
-                      <span className="tabular-nums text-[11px] text-slate-500 shrink-0">
-                        {c.date} · مدت {c.duration}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* TAB 8: پیام‌ها */}
-          {activeTab === 'messages' && (
-            <section className="bg-white border border-slate-200 rounded-xl p-5 space-y-4 text-xs">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (!newSmsInput.trim()) return;
-                  onSendSms([customer.id], newSmsInput.trim());
-                  setNewSmsInput('');
-                  onNotify(
-                    'پیامک ارسال شد',
-                    `پیامک برای «${customer.name}» ارسال و ثبت گردید.`,
-                    'پیام‌ها',
-                    'success'
-                  );
-                }}
-                className="flex flex-col sm:flex-row gap-2"
-              >
-                <input
-                  type="text"
-                  value={newSmsInput}
-                  onChange={(e) => setNewSmsInput(e.target.value)}
-                  placeholder="متن پیامک برای ارسال به شماره اصلی مشتری..."
-                  className="flex-1 h-10 px-3 rounded-lg border border-slate-300"
-                />
-                <button
-                  type="submit"
-                  className="h-10 px-4 rounded-lg bg-[#0f5864] text-white font-bold whitespace-nowrap"
-                >
-                  ارسال پیامک
-                </button>
-              </form>
-
-              {customer.smsHistory.length === 0 ? (
-                <p className="text-center py-6 text-slate-500">
-                  پیامکی ارسال نشده است.
-                </p>
-              ) : (
-                <div className="divide-y divide-slate-100">
-                  {customer.smsHistory.map((sms) => (
-                    <div key={sms.id} className="py-3 space-y-1">
-                      <div className="flex items-center justify-between text-[11px] text-slate-500 tabular-nums">
-                        <span>
-                          گیرنده: <strong dir="ltr">{sms.phone}</strong> ·{' '}
-                          {sms.sentBy}
-                        </span>
-                        <span>{sms.date}</span>
-                      </div>
-                      <p className="text-slate-800 leading-relaxed">
-                        {sms.text}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
             </section>
           )}
         </div>
