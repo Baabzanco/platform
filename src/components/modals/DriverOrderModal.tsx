@@ -15,13 +15,18 @@ import {
   Phone,
   Receipt,
   RefreshCw,
+  RotateCcw,
   Trash2,
   Undo2,
   X,
 } from 'lucide-react';
 import { Order, UploadedDocumentPhoto } from '../../types/order';
 import { AccessControlHelpers } from '../../types/permissions';
-import { formatWeight, getShippingWeight } from '../../utils/formatters';
+import {
+  formatRial,
+  formatWeight,
+  getShippingWeight,
+} from '../../utils/formatters';
 import { processDocumentImageFile } from '../../utils/imageUpload';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
 import { LocationModalMode } from './LocationMapModal';
@@ -44,6 +49,7 @@ interface DriverOrderModalProps {
   ) => void;
   onCompleteDelivery: (orderId: string) => void;
   onOpenReturnToSales: (order: Order) => void;
+  onOpenDriverReturn: (order: Order) => void;
 }
 
 export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
@@ -56,6 +62,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   onRemoveDocument,
   onCompleteDelivery,
   onOpenReturnToSales,
+  onOpenDriverReturn,
 }) => {
   const invoiceInputRef = useRef<HTMLInputElement>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
@@ -92,13 +99,30 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
   if (!order) return null;
 
+  const isReturned = order.status === 'returned' && Boolean(order.returnRecord);
+  const returnRecord = order.returnRecord;
+  const returnStage = returnRecord?.stage;
+  const returnTotalKg = Number(
+    (returnRecord?.items ?? [])
+      .reduce((sum, it) => sum + (it.shippingWeight ?? it.weight), 0)
+      .toFixed(2)
+  );
+  const returnTotalRial = (returnRecord?.items ?? []).reduce(
+    (sum, it) =>
+      sum +
+      (it.totalRial ??
+        Math.round((it.shippingWeight ?? it.weight) * (it.unitPrice ?? 0))),
+    0
+  );
+
   const invoicePhoto = order.driverDelivery?.invoicePhoto;
   const paymentReceiptPhoto = order.driverDelivery?.paymentReceiptPhoto;
+  const hasLocation = Boolean(order.customerLocation);
   const bothUploaded = Boolean(invoicePhoto && paymentReceiptPhoto);
   const completed = Boolean(order.driverDelivery?.sentToFinance);
   const financeVerified = Boolean(order.driverDelivery?.financeVerified);
   const financeRejected = Boolean(
-    order.driverDelivery?.financeRejected && !completed
+    !isReturned && order.driverDelivery?.financeRejected && !completed
   );
   const needsInvoiceRetake = Boolean(
     financeRejected && order.driverDelivery?.rejectedDocs?.invoice
@@ -107,7 +131,23 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
     financeRejected && order.driverDelivery?.rejectedDocs?.paymentReceipt
   );
   const hasUnresolvedRejectedDoc = needsInvoiceRetake || needsReceiptRetake;
-  const readyToSubmit = bothUploaded && !hasUnresolvedRejectedDoc;
+  const readyToSubmit =
+    hasLocation && bothUploaded && !hasUnresolvedRejectedDoc;
+
+  const missingRequirements: string[] = [];
+  if (!hasLocation) {
+    missingRequirements.push('ثبت لوکیشن مشتری روی نقشه');
+  }
+  if (needsInvoiceRetake) {
+    missingRequirements.push('ثبت مجدد عکس فاکتور (رد شده)');
+  } else if (!invoicePhoto) {
+    missingRequirements.push('ثبت عکس فاکتور');
+  }
+  if (needsReceiptRetake) {
+    missingRequirements.push('ثبت مجدد عکس رسید پرداخت (رد شده)');
+  } else if (!paymentReceiptPhoto) {
+    missingRequirements.push('ثبت عکس رسید پرداخت');
+  }
 
   const totalWeight = order.items.reduce(
     (sum, item) => sum + getShippingWeight(item),
@@ -157,7 +197,23 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
           </div>
 
           {/* Top Status Banner */}
-          {financeRejected && (
+          {isReturned && returnRecord && (
+            <div className="px-4 sm:px-5 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
+              <span className="inline-flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 shrink-0" />
+                {returnStage === 'awaiting_shipping_receive'
+                  ? 'مرجوعی ثبت شد — در انتظار تحویل بار و ثبت وزن توسط بخش ارسال'
+                  : returnStage === 'completed'
+                    ? 'مرجوعی توسط ارسال، تولید و صدور فاکتور تایید نهایی شد'
+                    : 'بار در بخش ارسال تحویل گرفته شد — در انتظار تایید هم‌زمان تولید و صدور فاکتور'}
+              </span>
+              <span className="tabular-nums opacity-95 text-[11px]">
+                {returnRecord.timestamp}
+              </span>
+            </div>
+          )}
+
+          {!isReturned && financeRejected && (
             <div className="px-4 sm:px-5 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
               <span className="inline-flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -171,7 +227,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             </div>
           )}
 
-          {completed && (
+          {!isReturned && completed && (
             <div className="px-4 sm:px-5 py-2.5 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
               <span className="inline-flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -188,7 +244,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
           {/* Header */}
           <div
             className={`px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 flex items-start justify-between gap-3 shrink-0 ${
-              financeRejected ? 'bg-red-50/70' : 'bg-slate-50'
+              isReturned || financeRejected ? 'bg-red-50/70' : 'bg-slate-50'
             }`}
           >
             <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-x-6 gap-y-2 flex-1 min-w-0">
@@ -330,8 +386,8 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                     </>
                   ) : (
                     <>
-                      <span className="text-[11px] text-amber-800 font-medium">
-                        هنوز موقعیت مکانی روی نقشه برای این مشتری ثبت نشده است.
+                      <span className="text-[11px] text-amber-800 font-semibold">
+                        موقعیت مکانی روی نقشه ثبت نشده است (ثبت لوکیشن جهت نهایی کردن تحویل الزامی است).
                       </span>
                       <button
                         type="button"
@@ -392,7 +448,54 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
               </div>
             </div>
 
+            {/* Driver Return Summary (when returned) */}
+            {isReturned && returnRecord && (
+              <div className="px-4 sm:px-5 py-4 bg-red-50/80 space-y-2.5 text-xs text-red-950">
+                <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-red-800">
+                  <span className="inline-flex items-center gap-1.5">
+                    <RotateCcw className="w-4 h-4 shrink-0" />
+                    جزئیات مرجوعی ثبت‌شده (
+                    {returnRecord.scope === 'full_order'
+                      ? 'کل سفارش'
+                      : 'بخشی از سفارش'}
+                    )
+                  </span>
+                  <span className="tabular-nums">
+                    حجم: {formatWeight(returnTotalKg)}
+                    {returnTotalRial > 0
+                      ? ` · مبلغ: ${formatRial(returnTotalRial)}`
+                      : ''}
+                  </span>
+                </div>
+                <ul className="list-disc mr-5 space-y-1 text-red-900">
+                  {returnRecord.items.map((it) => (
+                    <li key={it.itemId} className="tabular-nums">
+                      <strong>{it.productName}:</strong>{' '}
+                      {formatWeight(it.shippingWeight ?? it.weight)}
+                      {it.driverWeight !== undefined &&
+                        it.shippingWeight !== undefined &&
+                        Math.abs(it.driverWeight - it.shippingWeight) > 0.001 && (
+                          <span className="text-[11px] text-red-700 mr-1.5">
+                            (اعلام راننده: {formatWeight(it.driverWeight)} · تایید ارسال:{' '}
+                            {formatWeight(it.shippingWeight)})
+                          </span>
+                        )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="leading-relaxed">
+                  <strong>علت مرجوعی:</strong> {returnRecord.notes}
+                </p>
+                {returnRecord.shippingNote && (
+                  <p className="leading-relaxed text-slate-800">
+                    <strong>توضیح بخش ارسال:</strong> {returnRecord.shippingNote}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Two Required Document Capture / Upload Slots */}
+            {!isReturned && (
             <div className="px-4 sm:px-5 py-4 sm:py-5 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
                 <div>
@@ -401,8 +504,8 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                     {financeRejected
-                      ? 'عکس موردنظر را با کیفیت و نور مناسب مجدداً ثبت کنید و سپس ارسال مجدد را بزنید.'
-                      : 'پس از عکس گرفتن از فاکتور و رسید پرداخت، دکمه «اتمام تحویل» فعال می‌شود.'}
+                      ? 'عکس موردنظر را با کیفیت و نور مناسب مجدداً ثبت کنید و در صورت نبود لوکیشن، موقعیت مشتری را ثبت کرده و سپس ارسال مجدد را بزنید.'
+                      : 'پس از ثبت لوکیشن مشتری و آپلود عکس فاکتور و رسید پرداخت، دکمه «اتمام تحویل» فعال می‌شود.'}
                   </p>
                 </div>
                 <span className="tabular-nums text-xs font-bold text-[#0f5864]">
@@ -685,17 +788,44 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 </div>
               </div>
             </div>
+            )}
           </div>
 
           {/* Sticky Action Footer (Full-Width Thumb CTA on Mobile) */}
           <div className="px-4 sm:px-5 pt-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
-            {completed ? (
+            {isReturned ? (
+              <>
+                <span className="inline-flex items-center gap-2 text-xs font-bold text-red-800">
+                  <RotateCcw className="w-4 h-4 text-red-600 shrink-0" />
+                  {returnStage === 'awaiting_shipping_receive'
+                    ? 'سفارش مرجوعی به بخش ارسال ارجاع شده و منتظر تحویل مجدد بار است.'
+                    : returnStage === 'completed'
+                      ? 'مرجوعی توسط تمامی بخش‌ها تایید و در حسابداری ثبت شد.'
+                      : 'بخش ارسال بار مرجوعی را تحویل گرفت و برای تولید و صدور فاکتور ارسال کرد.'}
+                </span>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2 rounded-xl sm:rounded-md text-sm sm:text-xs font-semibold bg-white text-slate-700 border border-slate-300 hover:bg-slate-100 transition-colors whitespace-nowrap"
+                >
+                  بستن
+                </button>
+              </>
+            ) : completed ? (
               <>
                 <span className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                   تحویل تکمیل شد و عکس فاکتور و رسید پرداخت به بخش صدور فاکتور ارسال گردید.
                 </span>
                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenDriverReturn(order)}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                    مرجوع کردن سفارش
+                  </button>
                   <button
                     type="button"
                     onClick={() => onOpenReturnToSales(order)}
@@ -717,10 +847,18 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
               <>
                 <span className="text-xs font-semibold text-emerald-800">
                   {financeRejected
-                    ? 'مدارک اصلاحی ثبت شدند و آماده ارسال مجدد به واحد صدور فاکتور هستند.'
-                    : 'هر دو مدرک بارگذاری شدند و آماده ارسال به بخش صدور فاکتور هستند.'}
+                    ? 'لوکیشن و مدارک اصلاحی کامل هستند و آماده ارسال مجدد به واحد صدور فاکتور می‌باشند.'
+                    : 'لوکیشن مشتری و هر دو مدرک ثبت شدند و آماده ارسال به بخش صدور فاکتور هستند.'}
                 </span>
                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenDriverReturn(order)}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                    مرجوع کردن سفارش
+                  </button>
                   <button
                     type="button"
                     onClick={() => onOpenReturnToSales(order)}
@@ -743,16 +881,29 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
               </>
             ) : (
               <>
-                <span className="text-xs font-medium text-slate-600 leading-relaxed">
-                  {hasUnresolvedRejectedDoc
-                    ? 'برای فعال شدن ارسال مجدد، لطفاً عکس جدید مدرک(های) ردشده با کادر قرمز را ثبت کنید.'
-                    : !invoicePhoto && !paymentReceiptPhoto
-                      ? 'برای نمایش دکمه اتمام تحویل، لطفاً عکس فاکتور و عکس رسید پرداخت را ثبت کنید.'
-                      : !invoicePhoto
-                        ? 'عکس رسید پرداخت ثبت شد — لطفاً عکس فاکتور را نیز ثبت کنید.'
-                        : 'عکس فاکتور ثبت شد — لطفاً عکس رسید پرداخت را نیز ثبت کنید.'}
-                </span>
-                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                <div className="flex-1 min-w-0 space-y-1">
+                  <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                    <span>
+                      موارد الزامی باقی‌مانده برای نهایی کردن سفارش (
+                      {toPersianDigits(missingRequirements.length)} مورد):
+                    </span>
+                  </div>
+                  <ul className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs font-semibold text-slate-700 pr-4 list-disc">
+                    {missingRequirements.map((req) => (
+                      <li key={req}>{req}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenDriverReturn(order)}
+                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                    مرجوع کردن سفارش
+                  </button>
                   <button
                     type="button"
                     onClick={() => onOpenReturnToSales(order)}

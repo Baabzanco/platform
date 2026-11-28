@@ -91,9 +91,16 @@ function getShippingStatusDisplay(order: Order): {
   }
   if (order.status === 'returned') {
     const confirmed = order.returnRecord?.confirmations.shipping.confirmed;
-    return confirmed
-      ? { label: 'مرجوعی تایید شده', className: 'text-emerald-700' }
-      : { label: 'مرجوع شده — نیازمند تایید ارسال', className: 'text-red-700' };
+    if (confirmed) {
+      return { label: 'مرجوعی تایید شده (ارسال به تولید و فاکتور)', className: 'text-emerald-700' };
+    }
+    if (order.returnRecord?.stage === 'awaiting_shipping_receive') {
+      return {
+        label: 'مرجوعی از راننده — در انتظار تحویل بار و ثبت وزن',
+        className: 'text-red-700',
+      };
+    }
+    return { label: 'مرجوع شده — نیازمند تایید ارسال', className: 'text-red-700' };
   }
   if (order.status === 'delivered') {
     return { label: `تحویل به ${order.driverName}`, className: 'text-emerald-700' };
@@ -298,9 +305,15 @@ export const ShippingPage: React.FC<ShippingPageProps> = ({
                       <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
                           <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                          سفارش مرجوعی — نیازمند تایید در بخش ارسال
+                          {order.returnRecord?.stage === 'awaiting_shipping_receive'
+                            ? 'مرجوعی از راننده — در انتظار تحویل گرفتن مجدد بار و ثبت وزن'
+                            : 'سفارش مرجوعی — نیازمند تایید در بخش ارسال'}
                         </span>
-                        <span className="opacity-95 text-[11px]">لمس برای تایید</span>
+                        <span className="opacity-95 text-[11px]">
+                          {order.returnRecord?.stage === 'awaiting_shipping_receive'
+                            ? 'تحویل بار و ثبت وزن'
+                            : 'لمس برای تایید'}
+                        </span>
                       </div>
                     )}
 

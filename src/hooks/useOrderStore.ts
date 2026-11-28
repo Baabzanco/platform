@@ -8,6 +8,8 @@ import {
   CreateOrderInput,
   NotificationDepartment,
   Order,
+  ReturnItemEntry,
+  ReturnScope,
   ReturnToSalesSource,
   ToastNotification,
   ToastType,
@@ -15,7 +17,11 @@ import {
   UploadedDocumentPhoto,
   WorkflowDepartment,
 } from '../types/order';
-import { formatTimeStamp } from '../utils/formatters';
+import {
+  formatRial,
+  formatTimeStamp,
+  formatWeight,
+} from '../utils/formatters';
 import {
   DEFAULT_SELECTED_DATE_KEY,
   toPersianDigits,
@@ -651,7 +657,7 @@ export function useOrderStore() {
     [orders, pushToast]
   );
 
-  // 8. Shipping: register returned items and notify ALL departments
+  // 8. Shipping: register returned items directly and notify ALL departments
   const submitReturn = useCallback(
     (
       orderId: string,
@@ -661,12 +667,9 @@ export function useOrderStore() {
       const target = orders.find((o) => o.id === orderId);
       if (!target) return;
 
-      const returnedItemsList: Array<{
-        itemId: string;
-        productName: string;
-        weight: number;
-      }> = [];
+      const returnedItemsList: ReturnItemEntry[] = [];
       const now = Date.now();
+      const stamp = formatTimeStamp();
 
       setOrders((prev) =>
         prev.map((order) => {
@@ -678,6 +681,9 @@ export function useOrderStore() {
                 itemId: item.id,
                 productName: item.productName,
                 weight: retVal,
+                shippingWeight: retVal,
+                unitPrice: item.unitPrice,
+                totalRial: Math.round(retVal * item.unitPrice),
               });
             }
             return { ...item, returnedWeight: retVal };
@@ -689,13 +695,18 @@ export function useOrderStore() {
             lastActionAt: now,
             items: updatedItems,
             returnRecord: {
+              initiatedBy: 'shipping',
+              driverName: order.driverName || undefined,
+              scope: 'partial',
+              stage: 'awaiting_prod_and_finance',
               items: returnedItemsList,
               notes,
-              timestamp: formatTimeStamp(),
+              timestamp: stamp,
+              shippingReceivedAt: stamp,
               confirmations: {
                 production: { confirmed: false },
                 finance: { confirmed: false },
-                shipping: { confirmed: false },
+                shipping: { confirmed: true, confirmedAt: stamp },
               },
             },
           };
@@ -703,8 +714,159 @@ export function useOrderStore() {
       );
 
       const title = `اعلام مرجوعی سفارش ${target.code}`;
-      const message = `سفارش ${target.code} توسط بخش ارسال مرجوع شد و جهت تعیین‌تکلیف و تایید مرجوعی به تمامی واحدها اعلام گردید. علت: ${notes}`;
-      pushToast(title, message, 'اعلام به تمام واحدها (تولید، صدور فاکتور، ارسال)', 'danger');
+      const message = `سفارش ${target.code} توسط بخش ارسال مرجوع شد و جهت تعیین‌تکلیف و تایید همزمان به تولید و صدور فاکتور اعلام گردید. علت: ${notes}`;
+      pushToast(title, message, 'ارسال به تولید و صدور فاکتور', 'danger');
+      queueDeptNotification('production', title, message, 'danger');
+      queueDeptNotification('finance', title, message, 'danger');
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 8b. Driver: initiate full or partial order return -> routed FIRST to Shipping to receive & re-weigh
+  const submitDriverReturn = useCallback(
+    (
+      orderId: string,
+      scope: ReturnScope,
+      returnedWeights: Record<string, number>,
+      notes: string
+    ) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target) return;
+
+      const returnedItemsList: ReturnItemEntry[] = [];
+      let totalReturnedKg = 0;
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          const updatedItems = order.items.map((item) => {
+            const retVal = Number((returnedWeights[item.id] ?? 0).toFixed(2));
+            if (retVal > 0) {
+              totalReturnedKg = Number((totalReturnedKg + retVal).toFixed(2));
+              returnedItemsList.push({
+                itemId: item.id,
+                productName: item.productName,
+                weight: retVal,
+                driverWeight: retVal,
+                unitPrice: item.unitPrice,
+                totalRial: Math.round(retVal * item.unitPrice),
+              });
+            }
+            return { ...item, returnedWeight: retVal };
+          });
+
+          return {
+            ...order,
+            status: 'returned',
+            lastActionAt: now,
+            returnRecord: {
+              initiatedBy: 'driver',
+              driverName: order.driverName || 'راننده',
+              scope,
+              stage: 'awaiting_shipping_receive',
+              items: returnedItemsList,
+              notes,
+              timestamp: stamp,
+              confirmations: {
+                production: { confirmed: false },
+                finance: { confirmed: false },
+                shipping: { confirmed: false },
+              },
+            },
+            items: updatedItems,
+          };
+        })
+      );
+
+      const scopeLabel = scope === 'full_order' ? 'مرجوعی کل سفارش' : 'مرجوعی جزئی سفارش';
+      const title = `${scopeLabel} — سفارش ${target.code}`;
+      const message = `راننده (${target.driverName || 'راننده'}) مرجوعی سفارش ${target.code} به وزن ${formatWeight(totalReturnedKg)} را ثبت کرد. سفارش جهت تحویل گرفتن مجدد بار و ثبت وزن دقیق به بخش ارسال ارجاع شد.`;
+      pushToast(title, message, 'ارسال به بخش ارسال', 'danger');
+      queueDeptNotification('shipping', title, message, 'danger');
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 8c. Shipping: receive returned cargo from driver, enter verified weights & confirm -> simultaneously notify Production & Finance
+  const receiveReturnInShipping = useCallback(
+    (
+      orderId: string,
+      shippingWeights: Record<string, number>,
+      shippingNote: string
+    ) => {
+      const target = orders.find((o) => o.id === orderId);
+      if (!target || !target.returnRecord) return;
+
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+      const verifiedItems: ReturnItemEntry[] = [];
+      let totalVerifiedKg = 0;
+      let totalVerifiedRial = 0;
+
+      const driverWeightByItemId = new Map<string, number>();
+      target.returnRecord.items.forEach((it) => {
+        driverWeightByItemId.set(it.itemId, it.driverWeight ?? it.weight);
+      });
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId || !order.returnRecord) return order;
+
+          const updatedItems = order.items.map((item) => {
+            const verifiedVal = Number(
+              (shippingWeights[item.id] ?? 0).toFixed(2)
+            );
+            if (verifiedVal > 0) {
+              const rowPrice = Math.round(verifiedVal * item.unitPrice);
+              totalVerifiedKg = Number((totalVerifiedKg + verifiedVal).toFixed(2));
+              totalVerifiedRial += rowPrice;
+              verifiedItems.push({
+                itemId: item.id,
+                productName: item.productName,
+                weight: verifiedVal,
+                driverWeight: driverWeightByItemId.get(item.id),
+                shippingWeight: verifiedVal,
+                unitPrice: item.unitPrice,
+                totalRial: rowPrice,
+              });
+            }
+            return { ...item, returnedWeight: verifiedVal };
+          });
+
+          const isFullOrder = updatedItems.every((it) => {
+            const delivered =
+              it.deliveredWeight ??
+              it.revisedWeight ??
+              it.producedWeight ??
+              it.requestedWeight;
+            return it.returnedWeight >= delivered;
+          });
+
+          return {
+            ...order,
+            lastActionAt: now,
+            items: updatedItems,
+            returnRecord: {
+              ...order.returnRecord,
+              scope: isFullOrder ? 'full_order' : 'partial',
+              stage: 'awaiting_prod_and_finance',
+              items: verifiedItems,
+              shippingReceivedAt: stamp,
+              shippingNote: shippingNote.trim() || undefined,
+              confirmations: {
+                ...order.returnRecord.confirmations,
+                shipping: { confirmed: true, confirmedAt: stamp },
+              },
+            },
+          };
+        })
+      );
+
+      const title = `تایید دریافت مرجوعی در ارسال — سفارش ${target.code}`;
+      const message = `بخش ارسال بار مرجوعی سفارش ${target.code} را به وزن ${formatWeight(totalVerifiedKg)} (ارزش ${formatRial(totalVerifiedRial)}) از راننده تحویل گرفت و تایید کرد. مرجوعی همزمان به تولید و صدور فاکتور ارسال شد.`;
+      pushToast(title, message, 'ارسال همزمان به تولید و صدور فاکتور', 'warning');
       queueDeptNotification('production', title, message, 'danger');
       queueDeptNotification('finance', title, message, 'danger');
     },
@@ -717,6 +879,19 @@ export function useOrderStore() {
       const target = orders.find((o) => o.id === orderId);
       if (!target || !target.returnRecord) return;
       if (target.returnRecord.confirmations[dept]?.confirmed) return;
+
+      if (
+        target.returnRecord.stage === 'awaiting_shipping_receive' &&
+        dept !== 'shipping'
+      ) {
+        pushToast(
+          'در انتظار تحویل‌گیری بخش ارسال',
+          'ابتدا باید بخش ارسال بار مرجوعی را از راننده تحویل بگیرد، وزن مجدد را ثبت کند و تایید نماید.',
+          DEPARTMENT_LABELS[dept],
+          'warning'
+        );
+        return;
+      }
 
       const stamp = formatTimeStamp();
       const deptName = DEPARTMENT_LABELS[dept];
@@ -731,6 +906,17 @@ export function useOrderStore() {
         nextConfirmations.finance.confirmed &&
         nextConfirmations.shipping.confirmed;
 
+      const totalReturnKg = Number(
+        target.returnRecord.items
+          .reduce((sum, it) => sum + it.weight, 0)
+          .toFixed(2)
+      );
+      const totalReturnRial = target.returnRecord.items.reduce((sum, it) => {
+        if (typeof it.totalRial === 'number') return sum + it.totalRial;
+        const matchedItem = target.items.find((oi) => oi.id === it.itemId);
+        return sum + Math.round(it.weight * (matchedItem?.unitPrice ?? 0));
+      }, 0);
+
       setOrders((prev) =>
         prev.map((order) => {
           if (order.id !== orderId || !order.returnRecord) return order;
@@ -738,6 +924,7 @@ export function useOrderStore() {
             ...order,
             returnRecord: {
               ...order.returnRecord,
+              stage: allConfirmed ? 'completed' : order.returnRecord.stage,
               confirmations: {
                 ...order.returnRecord.confirmations,
                 [dept]: { confirmed: true, confirmedAt: stamp },
@@ -749,9 +936,9 @@ export function useOrderStore() {
 
       if (allConfirmed) {
         pushToast(
-          `تکمیل تعیین‌تکلیف مرجوعی — سفارش ${target.code}`,
-          `مرجوعی سفارش ${target.code} توسط ${deptName} و سایر واحدها به طور کامل تایید و ثبت نهایی شد.`,
-          'تایید کامل تمام واحدها',
+          `تکمیل مرجوعی و ثبت در رخداد حسابداری — سفارش ${target.code}`,
+          `مرجوعی سفارش ${target.code} توسط تمام واحدها تایید نهایی شد و حجم (${formatWeight(totalReturnKg)}) و مبلغ (${formatRial(totalReturnRial)}) در رخداد حسابداری طرف حساب ثبت گردید.`,
+          'ثبت نهایی مرجوعی',
           'success'
         );
       } else {
@@ -926,18 +1113,22 @@ export function useOrderStore() {
     []
   );
 
-  // 14. Driver: complete delivery once both photos are uploaded and send to Invoice Issuance
+  // 14. Driver: complete delivery once location and both photos are recorded and send to Invoice Issuance
   const completeDriverDelivery = useCallback(
     (orderId: string) => {
       const target = orders.find((o) => o.id === orderId);
       if (!target) return;
-      if (
-        !target.driverDelivery?.invoicePhoto ||
-        !target.driverDelivery?.paymentReceiptPhoto
-      ) {
+
+      const missing: string[] = [];
+      if (!target.customerLocation) missing.push('ثبت لوکیشن مشتری');
+      if (!target.driverDelivery?.invoicePhoto) missing.push('عکس فاکتور');
+      if (!target.driverDelivery?.paymentReceiptPhoto)
+        missing.push('عکس رسید پرداخت');
+
+      if (missing.length > 0) {
         pushToast(
-          'مدارک تحویل کامل نیست',
-          'برای اتمام تحویل، لطفاً هم عکس فاکتور و هم عکس رسید پرداخت را آپلود کنید.',
+          'امکان نهایی کردن تحویل وجود ندارد',
+          `برای اتمام تحویل، تکمیل این موارد الزامی است: ${missing.join('، ')}.`,
           'پنل رانندگان',
           'warning'
         );
@@ -1092,6 +1283,8 @@ export function useOrderStore() {
     submitDiscrepancy,
     submitDelivery,
     submitReturn,
+    submitDriverReturn,
+    receiveReturnInShipping,
     confirmReturnByDepartment,
     rejectOrder,
     saveCustomerLocation,

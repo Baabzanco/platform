@@ -14,6 +14,7 @@ import {
   Eye,
   Lock,
   MapPin,
+  PackageCheck,
   Phone,
   Printer,
   RotateCcw,
@@ -72,6 +73,7 @@ interface OrderDetailModalProps {
   onOpenDiscrepancy: (order: Order) => void;
   onOpenDelivery: (order: Order) => void;
   onOpenReturn: (order: Order) => void;
+  onOpenShippingReturnReceive?: (order: Order) => void;
   onDriverMissingWarning: (orderCode: string) => void;
   // Shared actions
   onOpenReject: (order: Order, source: WorkflowDepartment) => void;
@@ -99,6 +101,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onOpenDiscrepancy,
   onOpenDelivery,
   onOpenReturn,
+  onOpenShippingReturnReceive,
   onDriverMissingWarning,
   onOpenReject,
   onConfirmReturn,
@@ -162,10 +165,16 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
     department === 'finance' ||
     department === 'shipping';
 
+  const awaitingShippingReceive =
+    returned &&
+    order.returnRecord?.stage === 'awaiting_shipping_receive' &&
+    !(order.returnRecord?.confirmations.shipping.confirmed ?? false);
+
   const deptReturnPending =
     isWorkflowDept &&
     returned &&
-    !(order.returnRecord?.confirmations[department]?.confirmed ?? false);
+    !(order.returnRecord?.confirmations[department]?.confirmed ?? false) &&
+    (department === 'shipping' || !awaitingShippingReceive);
 
   const driverDocsRejectedPending = Boolean(
     order.driverDelivery?.financeRejected && !order.driverDelivery?.sentToFinance
@@ -197,6 +206,12 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
       return { text: `رد شده (${src})`, className: 'text-red-700' };
     }
     if (returned) {
+      if (awaitingShippingReceive) {
+        return {
+          text: 'مرجوعی از راننده — در انتظار تحویل بار در ارسال',
+          className: 'text-amber-700',
+        };
+      }
       return order.returnRecord?.confirmations.finance.confirmed
         ? { text: 'مرجوعی تایید شده (صدور فاکتور)', className: 'text-emerald-700' }
         : { text: 'مرجوع شده — در انتظار تایید صدور فاکتور', className: 'text-red-700' };
@@ -1079,6 +1094,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               currentDept={department}
               canEditConfirm={true}
               onConfirmReturn={() => onConfirmReturn(order.id, department)}
+              onOpenShippingReceive={
+                department === 'shipping' && onOpenShippingReturnReceive
+                  ? () => onOpenShippingReturnReceive(order)
+                  : undefined
+              }
               extraSummary={
                 department === 'finance' ? (
                   <div className="tabular-nums pt-1 text-xs text-red-900 flex flex-wrap gap-x-4 gap-y-1">
@@ -1477,43 +1497,61 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
 
             {(delivered || returned) && (
-              <div className="px-4 sm:px-5 py-3.5 bg-emerald-50 border-t border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-modal-safe shrink-0">
-                <span className="inline-flex items-center gap-2 text-emerald-800 font-bold text-xs sm:text-[13px]">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  با موفقیت تحویل داده شد
-                  {order.driverName ? ` (راننده: ${order.driverName})` : ''}
-                </span>
-
-                <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+              awaitingShippingReceive && onOpenShippingReturnReceive ? (
+                <div className="px-4 sm:px-5 py-3.5 bg-red-50 border-t border-red-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-modal-safe shrink-0">
+                  <span className="inline-flex items-center gap-2 text-red-900 font-bold text-xs sm:text-[13px]">
+                    <RotateCcw className="w-4 h-4 text-red-600 shrink-0" />
+                    مرجوعی توسط راننده ({order.returnRecord?.driverName || order.driverName}) ثبت شده — در انتظار تحویل مجدد بار و ثبت وزن
+                  </span>
                   <button
                     type="button"
-                    onClick={() => onOpenReturnToSales(order, 'shipping')}
-                    className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-900 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                    onClick={() => onOpenShippingReturnReceive(order)}
+                    className="min-h-[46px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-600 text-white hover:bg-red-700 transition-colors whitespace-nowrap shrink-0"
                   >
-                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
-                    برگشت سفارش به فروش
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={returned}
-                    onClick={() => onOpenReturn(order)}
-                    className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-white text-red-600 border border-red-500 hover:bg-red-600 hover:text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
-                  >
-                    {returned ? (
-                      <>
-                        <Check className="w-3.5 h-3.5" />
-                        مرجوعی ثبت شد
-                      </>
-                    ) : (
-                      <>
-                        <RotateCcw className="w-3.5 h-3.5" />
-                        مرجوع کردن سفارش
-                      </>
-                    )}
+                    <PackageCheck className="w-4 h-4 shrink-0" />
+                    تحویل گرفتن بار، ثبت وزن و تایید مرجوعی
                   </button>
                 </div>
-              </div>
+              ) : (
+                <div className="px-4 sm:px-5 py-3.5 bg-emerald-50 border-t border-emerald-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-modal-safe shrink-0">
+                  <span className="inline-flex items-center gap-2 text-emerald-800 font-bold text-xs sm:text-[13px]">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    {returned
+                      ? 'بار مرجوعی تحویل گرفته شد و به تولید و صدور فاکتور ارسال گردید'
+                      : `با موفقیت تحویل داده شد${order.driverName ? ` (راننده: ${order.driverName})` : ''}`}
+                  </span>
+
+                  <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onOpenReturnToSales(order, 'shipping')}
+                      className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-900 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                    >
+                      <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                      برگشت سفارش به فروش
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={returned}
+                      onClick={() => onOpenReturn(order)}
+                      className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-1.5 rounded-xl sm:rounded-md text-xs font-bold bg-white text-red-600 border border-red-500 hover:bg-red-600 hover:text-white disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-300 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                    >
+                      {returned ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          مرجوعی ثبت شد
+                        </>
+                      ) : (
+                        <>
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          مرجوع کردن سفارش
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )
             )}
           </>
         )}

@@ -18,6 +18,7 @@ import {
   Phone,
   PhoneCall,
   Plus,
+  RotateCcw,
   Search,
   Send,
   ShieldAlert,
@@ -49,7 +50,7 @@ import {
   CustomerStandingTier,
 } from '../../types/customer';
 import { Order } from '../../types/order';
-import { formatRial } from '../../utils/formatters';
+import { formatRial, formatWeight } from '../../utils/formatters';
 import { toPersianDigits } from '../../utils/jalaliCalendar';
 import { AccountingEntryDetailModal } from '../modals/AccountingEntryDetailModal';
 
@@ -1207,7 +1208,8 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                       const hasDetailPopup = Boolean(
                         entry.orderDetails ||
                           entry.chequeDetails ||
-                          entry.cashDetails
+                          entry.cashDetails ||
+                          entry.returnDetails
                       );
 
                       const rowBg = isBalanceRow
@@ -1248,7 +1250,21 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                             )}
                           </td>
                           <td className="px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
-                            {entry.settlementMethod === 'cheque' ? (
+                            {entry.returnDetails ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedAccountingEntry(entry)}
+                                className="inline-flex flex-col items-center leading-tight text-red-700 hover:underline cursor-pointer"
+                              >
+                                <span className="inline-flex items-center gap-1 font-bold">
+                                  <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                                  مرجوعی کالا
+                                </span>
+                                <span className="tabular-nums text-[10px] text-slate-600 font-semibold mt-0.5">
+                                  حجم: {formatWeight(entry.returnDetails.totalWeightKg)}
+                                </span>
+                              </button>
+                            ) : entry.settlementMethod === 'cheque' ? (
                               <button
                                 type="button"
                                 onClick={() => setSelectedAccountingEntry(entry)}

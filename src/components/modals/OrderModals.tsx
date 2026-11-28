@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   CameraOff,
+  Check,
+  PackageCheck,
   RotateCcw,
   RotateCw,
   Scale,
@@ -13,10 +15,16 @@ import { ALL_DEPARTMENT_LABELS } from '../../data/initialOrders';
 import {
   Order,
   OrderItem,
+  ReturnScope,
   ReturnToSalesSource,
   WorkflowDepartment,
 } from '../../types/order';
-import { getFinanceWeight, getShippingWeight } from '../../utils/formatters';
+import {
+  formatRial,
+  formatWeight,
+  getFinanceWeight,
+  getShippingWeight,
+} from '../../utils/formatters';
 
 interface BaseModalProps {
   open: boolean;
@@ -1093,6 +1101,579 @@ export const ReturnToSalesModal: React.FC<ReturnToSalesModalProps> = ({
             }}
             placeholder="توضیحات دقیق جهت اصلاح فاکتور توسط کارشناس فروش را بنویسید..."
             className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-600"
+          />
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </p>
+        )}
+      </form>
+    </ModalShell>
+  );
+};
+
+/* ================= 8. Driver Return Modal (Driver -> Shipping) ================= */
+interface DriverReturnModalProps {
+  open: boolean;
+  order: Order | null;
+  onClose: () => void;
+  onSubmit: (
+    scope: ReturnScope,
+    returnedWeights: Record<string, number>,
+    notes: string
+  ) => void;
+}
+
+const QUICK_DRIVER_RETURN_REASONS = [
+  'عدم تایید کیفیت یا نوع برش توسط مشتری',
+  'مغایرت اقلام یا وزن با درخواست مشتری',
+  'بسته بودن یا عدم حضور مشتری در محل تحویل',
+  'درخواست مشتری برای کاهش مقدار سفارش در محل',
+];
+
+export const DriverReturnModal: React.FC<DriverReturnModalProps> = ({
+  open,
+  order,
+  onClose,
+  onSubmit,
+}) => {
+  const [scope, setScope] = useState<ReturnScope>('full_order');
+  const [weights, setWeights] = useState<Record<string, string>>({});
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open && order) {
+      const fullMap: Record<string, string> = {};
+      order.items.forEach((item) => {
+        fullMap[item.id] = String(getShippingWeight(item));
+      });
+      setScope('full_order');
+      setWeights(fullMap);
+      setNotes('');
+      setError('');
+    }
+  }, [open, order]);
+
+  const handleScopeChange = (nextScope: ReturnScope) => {
+    if (!order) return;
+    setScope(nextScope);
+    setError('');
+    const nextWeights: Record<string, string> = {};
+    order.items.forEach((item) => {
+      nextWeights[item.id] =
+        nextScope === 'full_order' ? String(getShippingWeight(item)) : '0';
+    });
+    setWeights(nextWeights);
+  };
+
+  const toggleFullItemReturn = (item: OrderItem) => {
+    const maxWeight = getShippingWeight(item);
+    const current = parseFloat(weights[item.id]) || 0;
+    const isAlreadyFull = Math.abs(current - maxWeight) < 0.001;
+    setWeights((prev) => ({
+      ...prev,
+      [item.id]: isAlreadyFull ? '0' : String(maxWeight),
+    }));
+    setError('');
+  };
+
+  const totals = (order?.items ?? []).reduce(
+    (acc, item) => {
+      const maxWeight = getShippingWeight(item);
+      const val =
+        scope === 'full_order'
+          ? maxWeight
+          : Math.max(0, Math.min(maxWeight, parseFloat(weights[item.id]) || 0));
+      return {
+        weightKg: Number((acc.weightKg + val).toFixed(2)),
+        priceRial: acc.priceRial + Math.round(val * item.unitPrice),
+      };
+    },
+    { weightKg: 0, priceRial: 0 }
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+
+    const numericMap: Record<string, number> = {};
+    let totalReturned = 0;
+
+    for (const item of order.items) {
+      const maxWeight = getShippingWeight(item);
+      const val =
+        scope === 'full_order'
+          ? maxWeight
+          : parseFloat(weights[item.id] ?? '0') || 0;
+
+      if (!Number.isFinite(val) || val < 0 || val > maxWeight + 0.001) {
+        setError(
+          `وزن مرجوعی «${item.productName}» نمی‌تواند منفی یا بیشتر از وزن تحویلی (${maxWeight} کیلوگرم) باشد.`
+        );
+        return;
+      }
+      const rounded = Number(Math.min(val, maxWeight).toFixed(2));
+      numericMap[item.id] = rounded;
+      totalReturned = Number((totalReturned + rounded).toFixed(2));
+    }
+
+    if (totalReturned <= 0) {
+      setError('لطفاً حداقل یک کالا یا وزن مشخصی را برای مرجوعی وارد کنید.');
+      return;
+    }
+
+    if (!notes.trim()) {
+      setError('لطفاً علت مرجوعی سفارش را بنویسید.');
+      return;
+    }
+
+    // Automatically detect if all items are fully returned even in partial tab
+    const isEffectivelyFull = order.items.every(
+      (item) =>
+        Math.abs((numericMap[item.id] ?? 0) - getShippingWeight(item)) < 0.001
+    );
+    const finalScope: ReturnScope = isEffectivelyFull ? 'full_order' : 'partial';
+
+    onSubmit(finalScope, numericMap, notes.trim());
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      tone="danger"
+      maxWidthClass="max-w-[580px]"
+      icon={<RotateCcw className="w-4 h-4 shrink-0" />}
+      title={`ثبت مرجوعی سفارش ${order?.code ?? ''} توسط راننده`}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            انصراف
+          </button>
+          <button
+            type="submit"
+            form="driver-return-modal-form"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
+          >
+            ثبت مرجوعی و ارسال به بخش ارسال
+          </button>
+        </>
+      }
+    >
+      <form id="driver-return-modal-form" onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-slate-600 leading-relaxed">
+          نوع مرجوعی و وزن دقیق کالاهای برگشتی را ثبت کنید. این سفارش به‌صورت مرجوعی به{' '}
+          <strong className="text-red-700">بخش ارسال</strong> ارجاع می‌شود تا پس از تحویل گرفتن مجدد بار و ثبت وزن، به تولید و صدور فاکتور ارسال گردد.
+        </p>
+
+        {/* Scope Selector */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={() => handleScopeChange('full_order')}
+            className={`min-h-[48px] px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-colors text-center ${
+              scope === 'full_order'
+                ? 'border-red-600 bg-red-50 text-red-900'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            مرجوعی کل سفارش
+          </button>
+          <button
+            type="button"
+            onClick={() => handleScopeChange('partial')}
+            className={`min-h-[48px] px-3 py-2.5 rounded-xl border-2 text-xs font-bold transition-colors text-center ${
+              scope === 'partial'
+                ? 'border-red-600 bg-red-50 text-red-900'
+                : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
+            }`}
+          >
+            مرجوعی بخشی از سفارش
+          </button>
+        </div>
+
+        {/* Items List */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-800">
+              {scope === 'full_order'
+                ? 'اقلام کل سفارش (مرجوعی کامل):'
+                : 'انتخاب کالای کامل یا ورود وزن دقیق مرجوعی (کیلوگرم):'}
+            </span>
+          </div>
+
+          {order?.items.map((item) => {
+            const maxWeight = getShippingWeight(item);
+            const currentVal =
+              scope === 'full_order'
+                ? maxWeight
+                : parseFloat(weights[item.id] ?? '0') || 0;
+            const isFullItem = Math.abs(currentVal - maxWeight) < 0.001;
+
+            return (
+              <div
+                key={item.id}
+                className={`rounded-xl border px-3.5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-colors ${
+                  currentVal > 0
+                    ? 'bg-red-50/45 border-red-300'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-[13px] font-bold text-slate-900">
+                    {item.productName}
+                  </div>
+                  <div className="tabular-nums text-[11px] text-slate-500 mt-0.5">
+                    وزن تحویلی: {formatWeight(maxWeight)}
+                  </div>
+                </div>
+
+                {scope === 'full_order' ? (
+                  <span className="tabular-nums inline-flex items-center gap-1.5 text-xs font-bold text-red-700 bg-white border border-red-200 px-3 py-1.5 rounded-lg self-start sm:self-auto">
+                    <Check className="w-3.5 h-3.5 shrink-0" />
+                    کل وزن: {formatWeight(maxWeight)}
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => toggleFullItemReturn(item)}
+                      className={`min-h-[40px] px-2.5 py-1.5 rounded-lg text-[11px] font-bold border transition-colors whitespace-nowrap ${
+                        isFullItem
+                          ? 'bg-red-600 text-white border-red-600'
+                          : 'bg-white text-red-700 border-red-300 hover:bg-red-50'
+                      }`}
+                    >
+                      {isFullItem ? 'کل کالا انتخاب شد' : 'مرجوع کامل این کالا'}
+                    </button>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      max={maxWeight}
+                      aria-label={`وزن مرجوعی ${item.productName}`}
+                      value={weights[item.id] ?? '0'}
+                      onChange={(e) => {
+                        setWeights((prev) => ({
+                          ...prev,
+                          [item.id]: e.target.value,
+                        }));
+                        setError('');
+                      }}
+                      className="tabular-nums w-24 h-10 px-2.5 text-sm font-bold bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Live Totals Strip */}
+        <div className="rounded-xl border border-red-200 bg-red-50/70 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs tabular-nums">
+          <span className="text-red-900 font-semibold">
+            جمع حجم مرجوعی:{' '}
+            <strong className="text-red-700 text-sm">
+              {formatWeight(totals.weightKg)}
+            </strong>
+          </span>
+          <span className="text-red-900 font-semibold">
+            ارزش ریالی مرجوعی:{' '}
+            <strong className="text-red-700 text-sm">
+              {formatRial(totals.priceRial)}
+            </strong>
+          </span>
+        </div>
+
+        {/* Quick Reason Suggestions */}
+        <div className="space-y-1.5">
+          <span className="block text-xs font-medium text-slate-600">
+            دلایل پرتکرار (انتخاب سریع):
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {QUICK_DRIVER_RETURN_REASONS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  setNotes(preset);
+                  setError('');
+                }}
+                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-medium border transition-colors text-right ${
+                  notes === preset
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-red-300 hover:bg-red-50'
+                }`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Notes */}
+        <div className="space-y-1.5">
+          <label
+            htmlFor="driver-return-notes"
+            className="block text-xs font-bold text-slate-800"
+          >
+            توضیحات و علت مرجوعی:
+          </label>
+          <textarea
+            id="driver-return-notes"
+            rows={3}
+            value={notes}
+            onChange={(e) => {
+              setNotes(e.target.value);
+              setError('');
+            }}
+            placeholder="علت دقیق مرجوعی کالا توسط مشتری را بنویسید..."
+            className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+          />
+        </div>
+
+        {error && (
+          <p className="text-xs text-red-600 flex items-center gap-1.5 font-medium">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            {error}
+          </p>
+        )}
+      </form>
+    </ModalShell>
+  );
+};
+
+/* ================= 9. Shipping Receive Return Modal (Shipping -> Prod + Finance) ================= */
+interface ShippingReturnReceiveModalProps {
+  open: boolean;
+  order: Order | null;
+  onClose: () => void;
+  onSubmit: (
+    shippingWeights: Record<string, number>,
+    shippingNote: string
+  ) => void;
+}
+
+export const ShippingReturnReceiveModal: React.FC<
+  ShippingReturnReceiveModalProps
+> = ({ open, order, onClose, onSubmit }) => {
+  const [weights, setWeights] = useState<Record<string, string>>({});
+  const [shippingNote, setShippingNote] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open && order) {
+      const driverWeightMap = new Map<string, number>();
+      order.returnRecord?.items.forEach((ret) => {
+        driverWeightMap.set(ret.itemId, ret.driverWeight ?? ret.weight);
+      });
+      const initial: Record<string, string> = {};
+      order.items.forEach((item) => {
+        const w = driverWeightMap.get(item.id) ?? item.returnedWeight ?? 0;
+        initial[item.id] = String(w);
+      });
+      setWeights(initial);
+      setShippingNote('');
+      setError('');
+    }
+  }, [open, order]);
+
+  const driverWeightByItemId = new Map<string, number>();
+  order?.returnRecord?.items.forEach((ret) => {
+    driverWeightByItemId.set(ret.itemId, ret.driverWeight ?? ret.weight);
+  });
+
+  const totals = (order?.items ?? []).reduce(
+    (acc, item) => {
+      const maxWeight = getShippingWeight(item);
+      const val = Math.max(
+        0,
+        Math.min(maxWeight, parseFloat(weights[item.id] ?? '0') || 0)
+      );
+      return {
+        weightKg: Number((acc.weightKg + val).toFixed(2)),
+        priceRial: acc.priceRial + Math.round(val * item.unitPrice),
+      };
+    },
+    { weightKg: 0, priceRial: 0 }
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+
+    const numericMap: Record<string, number> = {};
+    let totalVerified = 0;
+
+    for (const item of order.items) {
+      const maxWeight = getShippingWeight(item);
+      const val = parseFloat(weights[item.id] ?? '0') || 0;
+      if (!Number.isFinite(val) || val < 0 || val > maxWeight + 0.001) {
+        setError(
+          `وزن تحویل‌گرفته‌شده «${item.productName}» نمی‌تواند منفی یا بیشتر از وزن خروجی (${maxWeight} کیلوگرم) باشد.`
+        );
+        return;
+      }
+      const rounded = Number(Math.min(val, maxWeight).toFixed(2));
+      numericMap[item.id] = rounded;
+      totalVerified = Number((totalVerified + rounded).toFixed(2));
+    }
+
+    if (totalVerified <= 0) {
+      setError('لطفاً وزن تحویل‌گرفته‌شده را حداقل برای یک کالا وارد کنید.');
+      return;
+    }
+
+    onSubmit(numericMap, shippingNote.trim());
+    onClose();
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onClose={onClose}
+      tone="danger"
+      maxWidthClass="max-w-[580px]"
+      icon={<PackageCheck className="w-4 h-4 shrink-0" />}
+      title={`تحویل گرفتن بار مرجوعی از راننده — سفارش ${order?.code ?? ''}`}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full sm:w-auto min-h-[44px] sm:min-h-0 px-4 py-2.5 sm:py-2 text-sm sm:text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl sm:rounded-lg hover:bg-slate-100 transition-colors"
+          >
+            انصراف
+          </button>
+          <button
+            type="submit"
+            form="shipping-return-receive-form"
+            className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
+          >
+            تایید تحویل مرجوعی و ارسال به تولید و صدور فاکتور
+          </button>
+        </>
+      }
+    >
+      <form
+        id="shipping-return-receive-form"
+        onSubmit={handleSubmit}
+        className="space-y-4"
+      >
+        <div className="rounded-xl bg-red-50/70 border border-red-200 px-3.5 py-3 text-xs text-red-950 space-y-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-red-800">
+            <span>
+              راننده: {order?.returnRecord?.driverName || order?.driverName || '—'}
+            </span>
+            <span>
+              {order?.returnRecord?.scope === 'full_order'
+                ? 'مرجوعی کل سفارش'
+                : 'مرجوعی جزئی سفارش'}
+            </span>
+          </div>
+          {order?.returnRecord?.notes && (
+            <p className="text-red-900 leading-relaxed">
+              <strong>توضیح راننده:</strong> {order.returnRecord.notes}
+            </p>
+          )}
+        </div>
+
+        <p className="text-xs text-slate-600 leading-relaxed">
+          بار مرجوعی را از راننده تحویل گرفته، وزن دقیق باسکول بخش ارسال را برای هر کالا ثبت و تایید کنید تا به‌صورت هم‌زمان برای{' '}
+          <strong className="text-slate-900">تولید</strong> و{' '}
+          <strong className="text-slate-900">صدور فاکتور</strong> ارسال شود:
+        </p>
+
+        <div className="space-y-2.5">
+          {order?.items.map((item) => {
+            const maxWeight = getShippingWeight(item);
+            const driverReported = driverWeightByItemId.get(item.id) ?? 0;
+            const currentVal = parseFloat(weights[item.id] ?? '0') || 0;
+            return (
+              <div
+                key={item.id}
+                className={`rounded-xl border px-3.5 py-3 flex items-center justify-between gap-3 ${
+                  currentVal > 0
+                    ? 'bg-red-50/40 border-red-300'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="min-w-0 space-y-0.5">
+                  <div className="text-xs sm:text-[13px] font-bold text-slate-900">
+                    {item.productName}
+                  </div>
+                  <div className="tabular-nums text-[11px] text-slate-600 flex flex-wrap gap-x-3">
+                    <span>خروجی: {formatWeight(maxWeight)}</span>
+                    <span className="text-red-700 font-semibold">
+                      اعلام راننده: {formatWeight(driverReported)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    max={maxWeight}
+                    aria-label={`وزن تاییدشده ارسال برای ${item.productName}`}
+                    value={weights[item.id] ?? '0'}
+                    onChange={(e) => {
+                      setWeights((prev) => ({
+                        ...prev,
+                        [item.id]: e.target.value,
+                      }));
+                      setError('');
+                    }}
+                    className="tabular-nums w-24 sm:w-28 h-11 px-3 text-sm font-bold bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-500"
+                  />
+                  <span className="text-[11px] font-semibold text-slate-500">kg</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Verified Summary Strip */}
+        <div className="rounded-xl border border-[#0f5864]/25 bg-[#0f5864]/5 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs tabular-nums">
+          <span className="text-slate-700 font-semibold">
+            حجم تاییدشده در ارسال:{' '}
+            <strong className="text-[#0f5864] text-sm">
+              {formatWeight(totals.weightKg)}
+            </strong>
+          </span>
+          <span className="text-slate-700 font-semibold">
+            مبلغ مرجوعی:{' '}
+            <strong className="text-red-700 text-sm">
+              {formatRial(totals.priceRial)}
+            </strong>
+          </span>
+        </div>
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="shipping-return-receive-note"
+            className="block text-xs font-medium text-slate-700"
+          >
+            توضیحات تحویل مجدد بار در بخش ارسال (اختیاری):
+          </label>
+          <textarea
+            id="shipping-return-receive-note"
+            rows={2}
+            value={shippingNote}
+            onChange={(e) => setShippingNote(e.target.value)}
+            placeholder="مثلاً: بار سالم تحویل گرفته شد و وزن باسکول ثبت گردید..."
+            className="w-full px-3.5 py-2 text-sm border border-slate-300 rounded-xl sm:rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0f5864]/30 focus:border-[#0f5864]"
           />
         </div>
 

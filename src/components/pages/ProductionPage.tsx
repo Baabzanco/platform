@@ -58,6 +58,7 @@ function isReadyForFinalApprovalInProd(order: Order): boolean {
 function isPendingReturnConfirmInProd(order: Order): boolean {
   return (
     order.status === 'returned' &&
+    order.returnRecord?.stage !== 'awaiting_shipping_receive' &&
     !(order.returnRecord?.confirmations.production.confirmed ?? false)
   );
 }
@@ -560,98 +561,160 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {prepSummary.rows.map((row) => (
-                    <tr key={row.productName} className="group hover:bg-slate-50/90 transition-colors">
-                      <td className="sticky right-0 z-10 bg-white group-hover:bg-slate-50 text-right font-bold px-3 sm:px-5 py-3 border-l-2 border-slate-200 text-slate-900 whitespace-nowrap">
-                        {row.productName}
-                      </td>
-                      {Array.from({ length: prepSummary.maxColumns }).map((_, colIdx) => {
-                        const alloc = row.allocations[colIdx];
-                        if (!alloc) {
-                          return (
-                            <React.Fragment key={colIdx}>
-                              <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">—</td>
-                              <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">—</td>
-                              <td className="px-3 sm:px-4 py-3 border-l-2 border-slate-200 text-slate-300">—</td>
-                            </React.Fragment>
-                          );
-                        }
-                        const isWeighed = alloc.producedWeight !== null;
-                        return (
-                          <React.Fragment key={`${alloc.orderId}-${alloc.itemId}`}>
-                            <td
-                              className={`tabular-nums px-2.5 sm:px-3.5 py-2.5 border-l border-slate-100 whitespace-nowrap ${
-                                isWeighed ? 'bg-emerald-50/70' : ''
-                              }`}
-                            >
-                              <div className="inline-flex items-center justify-center gap-2">
-                                <div className="text-right">
-                                  <span className="font-bold text-slate-800 block leading-tight">
-                                    {alloc.requestedWeight} kg
-                                  </span>
-                                  {isWeighed && (
-                                    <span className="block text-[10px] font-bold text-emerald-700 leading-tight mt-0.5">
-                                      ثبت: {alloc.producedWeight} kg
-                                    </span>
-                                  )}
-                                </div>
+                  {prepSummary.rows.map((row) => {
+                    const defaultAlloc =
+                      row.allocations.find((a) => a.producedWeight === null) ??
+                      row.allocations[0];
 
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleOpenPrepWeight(alloc.orderId, alloc.itemId)
-                                  }
-                                  className={`no-print min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                    const handleOpenRowDefaultWeight = () => {
+                      if (defaultAlloc) {
+                        handleOpenPrepWeight(
+                          defaultAlloc.orderId,
+                          defaultAlloc.itemId
+                        );
+                      }
+                    };
+
+                    return (
+                      <tr
+                        key={row.productName}
+                        className="group hover:bg-slate-50/90 transition-colors"
+                      >
+                        <td
+                          role="button"
+                          tabIndex={0}
+                          onClick={handleOpenRowDefaultWeight}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleOpenRowDefaultWeight();
+                            }
+                          }}
+                          title="برای ثبت وزن کلیک کنید"
+                          className="sticky right-0 z-10 bg-white group-hover:bg-slate-50 hover:bg-sky-50/70 text-right font-bold px-3 sm:px-5 py-3 border-l-2 border-slate-200 text-slate-900 hover:text-[#0f5864] whitespace-nowrap cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
+                        >
+                          {row.productName}
+                        </td>
+                        {Array.from({ length: prepSummary.maxColumns }).map(
+                          (_, colIdx) => {
+                            const alloc = row.allocations[colIdx];
+                            if (!alloc) {
+                              return (
+                                <React.Fragment key={colIdx}>
+                                  <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">
+                                    —
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">
+                                    —
+                                  </td>
+                                  <td className="px-3 sm:px-4 py-3 border-l-2 border-slate-200 text-slate-300">
+                                    —
+                                  </td>
+                                </React.Fragment>
+                              );
+                            }
+                            const isWeighed = alloc.producedWeight !== null;
+                            const openAllocWeight = () =>
+                              handleOpenPrepWeight(alloc.orderId, alloc.itemId);
+
+                            return (
+                              <React.Fragment
+                                key={`${alloc.orderId}-${alloc.itemId}`}
+                              >
+                                <td
+                                  onClick={openAllocWeight}
+                                  title="برای ثبت وزن کلیک کنید"
+                                  className={`tabular-nums px-2.5 sm:px-3.5 py-2.5 border-l border-slate-100 whitespace-nowrap cursor-pointer transition-colors ${
                                     isWeighed
-                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                      : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                      ? 'bg-emerald-50/70 hover:bg-emerald-100/70'
+                                      : 'hover:bg-sky-50/70'
                                   }`}
                                 >
-                                  {isWeighed ? (
-                                    <>
-                                      <Check className="w-3 h-3 shrink-0" />
-                                      ثبت شد
-                                    </>
-                                  ) : (
-                                    'ثبت'
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-                            <td
-                              className={`px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-600 whitespace-nowrap ${
-                                isWeighed ? 'bg-emerald-50/40' : ''
-                              }`}
-                            >
-                              {alloc.deliverySlot}
-                            </td>
-                            <td
-                              className={`tabular-nums px-3 sm:px-4 py-2.5 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap ${
-                                isWeighed ? 'bg-emerald-50/40' : ''
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                onClick={() => onSelectOrder(alloc.orderId)}
-                                title={`زمان ثبت فاکتور: ${alloc.createdAt}`}
-                                className="min-h-[36px] px-2 hover:underline text-[#0056b3] font-bold flex flex-col items-center justify-center mx-auto leading-tight"
-                              >
-                                <span>{alloc.orderCode}</span>
-                                <span className="text-[10px] font-medium text-slate-400 mt-0.5">
-                                  {alloc.createdAt.includes(' - ')
-                                    ? alloc.createdAt.split(' - ')[1]
-                                    : alloc.createdAt}
-                                </span>
-                              </button>
-                            </td>
-                          </React.Fragment>
-                        );
-                      })}
-                      <td className="sticky left-0 z-10 tabular-nums px-3 sm:px-5 py-3 bg-emerald-50 text-emerald-800 border-r-2 border-emerald-200 font-bold whitespace-nowrap">
-                        {row.totalRequestedWeight} kg
-                      </td>
-                    </tr>
-                  ))}
+                                  <div className="inline-flex items-center justify-center gap-2">
+                                    <div className="text-right">
+                                      <span className="font-bold text-slate-800 block leading-tight">
+                                        {alloc.requestedWeight} kg
+                                      </span>
+                                      {isWeighed && (
+                                        <span className="block text-[10px] font-bold text-emerald-700 leading-tight mt-0.5">
+                                          ثبت: {alloc.producedWeight} kg
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openAllocWeight();
+                                      }}
+                                      className={`no-print min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
+                                        isWeighed
+                                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                          : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                      }`}
+                                    >
+                                      {isWeighed ? (
+                                        <>
+                                          <Check className="w-3 h-3 shrink-0" />
+                                          ثبت شد
+                                        </>
+                                      ) : (
+                                        'ثبت'
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                                <td
+                                  onClick={openAllocWeight}
+                                  title="برای ثبت وزن کلیک کنید"
+                                  className={`px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-600 whitespace-nowrap cursor-pointer transition-colors ${
+                                    isWeighed
+                                      ? 'bg-emerald-50/40 hover:bg-emerald-100/60'
+                                      : 'hover:bg-sky-50/70'
+                                  }`}
+                                >
+                                  {alloc.deliverySlot}
+                                </td>
+                                <td
+                                  onClick={openAllocWeight}
+                                  title={`برای ثبت وزن کلیک کنید · زمان ثبت فاکتور: ${alloc.createdAt}`}
+                                  className={`tabular-nums px-3 sm:px-4 py-2.5 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap cursor-pointer transition-colors ${
+                                    isWeighed
+                                      ? 'bg-emerald-50/40 hover:bg-emerald-100/60'
+                                      : 'hover:bg-sky-50/70'
+                                  }`}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openAllocWeight();
+                                    }}
+                                    className="min-h-[36px] px-2 hover:underline text-[#0056b3] font-bold flex flex-col items-center justify-center mx-auto leading-tight"
+                                  >
+                                    <span>{alloc.orderCode}</span>
+                                    <span className="text-[10px] font-medium text-slate-400 mt-0.5">
+                                      {alloc.createdAt.includes(' - ')
+                                        ? alloc.createdAt.split(' - ')[1]
+                                        : alloc.createdAt}
+                                    </span>
+                                  </button>
+                                </td>
+                              </React.Fragment>
+                            );
+                          }
+                        )}
+                        <td
+                          onClick={handleOpenRowDefaultWeight}
+                          title="برای ثبت وزن کلیک کنید"
+                          className="sticky left-0 z-10 tabular-nums px-3 sm:px-5 py-3 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border-r-2 border-emerald-200 font-bold whitespace-nowrap cursor-pointer transition-colors"
+                        >
+                          {row.totalRequestedWeight} kg
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -818,14 +881,19 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                         const orderTimeOnly = alloc.createdAt.includes(' - ')
                           ? alloc.createdAt.split(' - ')[1]
                           : alloc.createdAt;
+                        const openAllocWeight = () =>
+                          handleOpenPrepWeight(alloc.orderId, alloc.itemId);
 
                         return (
-                          <div
+                          <button
                             key={`${alloc.orderId}-${alloc.itemId}`}
-                            className={`px-4 sm:px-5 py-3 transition-colors ${
+                            type="button"
+                            onClick={openAllocWeight}
+                            title={`برای ثبت وزن کلیک کنید · زمان ثبت فاکتور: ${alloc.createdAt}`}
+                            className={`w-full text-right block px-4 sm:px-5 py-3 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864] ${
                               isWeighed
-                                ? 'bg-emerald-50/45 hover:bg-emerald-50/75'
-                                : 'bg-white hover:bg-slate-50/80'
+                                ? 'bg-emerald-50/45 hover:bg-emerald-50/85'
+                                : 'bg-white hover:bg-sky-50/60'
                             }`}
                           >
                             {/* Desktop / Tablet Row */}
@@ -851,29 +919,20 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                               </div>
 
                               <div className="min-w-0">
-                                <button
-                                  type="button"
-                                  onClick={() => onSelectOrder(alloc.orderId)}
-                                  title={`زمان ثبت فاکتور: ${alloc.createdAt}`}
-                                  className="tabular-nums text-right hover:underline text-[#0056b3] font-bold inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
-                                >
+                                <span className="tabular-nums text-[#0056b3] font-bold inline-flex items-center gap-2">
                                   <span>{alloc.orderCode}</span>
                                   <span className="text-[11px] font-medium text-slate-400">
                                     {orderTimeOnly}
                                   </span>
-                                </button>
+                                </span>
                               </div>
 
                               <div className="flex justify-end">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleOpenPrepWeight(alloc.orderId, alloc.itemId)
-                                  }
-                                  className={`no-print min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] ${
+                                <span
+                                  className={`no-print min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                                     isWeighed
-                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                      : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-[#0f5864] text-white'
                                   }`}
                                 >
                                   {isWeighed ? (
@@ -884,7 +943,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                                   ) : (
                                     'ثبت وزن'
                                   )}
-                                </button>
+                                </span>
                               </div>
                             </div>
 
@@ -907,15 +966,11 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                                   </div>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleOpenPrepWeight(alloc.orderId, alloc.itemId)
-                                  }
+                                <span
                                   className={`no-print min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
                                     isWeighed
-                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                      : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                      ? 'bg-emerald-600 text-white'
+                                      : 'bg-[#0f5864] text-white'
                                   }`}
                                 >
                                   {isWeighed ? (
@@ -926,7 +981,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                                   ) : (
                                     'ثبت وزن'
                                   )}
-                                </button>
+                                </span>
                               </div>
 
                               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 pr-5">
@@ -937,19 +992,15 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                                 <span aria-hidden="true" className="text-slate-300">
                                   ·
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => onSelectOrder(alloc.orderId)}
-                                  className="tabular-nums text-[#0056b3] font-bold hover:underline inline-flex items-center gap-1"
-                                >
+                                <span className="tabular-nums text-[#0056b3] font-bold inline-flex items-center gap-1">
                                   <span>کد {alloc.orderCode}</span>
                                   <span className="text-[11px] font-normal text-slate-400">
                                     ({orderTimeOnly})
                                   </span>
-                                </button>
+                                </span>
                               </div>
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>

@@ -15,6 +15,7 @@ import {
   MapPin,
   Package,
   Receipt,
+  RotateCcw,
   Truck,
   User,
   X,
@@ -98,6 +99,7 @@ export const AccountingEntryDetailModal: React.FC<
   const order = entry.orderDetails;
   const cheque = entry.chequeDetails;
   const cash = entry.cashDetails;
+  const returnDetails = entry.returnDetails;
   const settlementMethod = entry.settlementMethod;
 
   const handleCopySayadi = (id: string) => {
@@ -209,7 +211,136 @@ export const AccountingEntryDetailModal: React.FC<
               </div>
             </div>
 
+            {/* RETURN DETAILS VIEW (Volume & Price) */}
+            {returnDetails && (
+              <section className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <RotateCcw className="w-4 h-4 text-red-600 shrink-0" />
+                    <h3 className="text-sm font-bold text-slate-900">
+                      جزئیات سند مرجوعی (حجم و قیمت)
+                    </h3>
+                  </div>
+                  <span className="text-xs font-bold text-red-700">
+                    {returnDetails.scope === 'full_order'
+                      ? 'مرجوعی کل سفارش'
+                      : 'مرجوعی بخشی از سفارش'}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-red-200 bg-red-50/35 p-4 space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pb-3 border-b border-red-200/70 text-xs tabular-nums">
+                    <div className="space-y-0.5">
+                      <div className="text-slate-500">حجم کل مرجوعی</div>
+                      <div className="font-bold text-red-800 text-sm">
+                        {formatWeight(returnDetails.totalWeightKg)}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-slate-500">مبلغ کل کسر مرجوعی</div>
+                      <div className="font-bold text-emerald-800 text-sm">
+                        {formatRial(returnDetails.totalPriceRial)}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-slate-500">راننده تحویل‌دهنده</div>
+                      <div className="font-bold text-slate-900">
+                        {returnDetails.driverName || '—'}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-slate-500">زمان تحویل بار در ارسال</div>
+                      <div className="font-semibold text-slate-800">
+                        {returnDetails.shippingReceivedAt || '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border border-red-200/80 bg-white">
+                    <table className="w-full min-w-[480px] border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-red-50/80 text-red-950 font-bold">
+                          <th className="w-9 px-2.5 py-2 text-center border-b border-red-200">
+                            #
+                          </th>
+                          <th className="px-3 py-2 text-right border-b border-red-200">
+                            نام محصول
+                          </th>
+                          <th className="w-28 px-3 py-2 text-center border-b border-red-200 whitespace-nowrap">
+                            اعلام راننده
+                          </th>
+                          <th className="w-32 px-3 py-2 text-center border-b border-red-200 whitespace-nowrap">
+                            وزن تاییدشده ارسال
+                          </th>
+                          <th className="w-32 px-3 py-2 text-left border-b border-red-200 whitespace-nowrap">
+                            فی واحد (ریال)
+                          </th>
+                          <th className="w-36 px-3 py-2 text-left border-b border-red-200 whitespace-nowrap">
+                            مبلغ مرجوعی
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {returnDetails.items.map((item, idx) => (
+                          <tr
+                            key={item.id}
+                            className="border-b border-slate-100 last:border-b-0"
+                          >
+                            <td className="px-2.5 py-2 text-center tabular-nums text-slate-500">
+                              {toPersianDigits(idx + 1)}
+                            </td>
+                            <td className="px-3 py-2 text-right font-semibold text-slate-900">
+                              {item.productName}
+                            </td>
+                            <td className="px-3 py-2 text-center tabular-nums text-slate-600 whitespace-nowrap">
+                              {item.driverWeightKg !== undefined
+                                ? formatWeight(item.driverWeightKg)
+                                : '—'}
+                            </td>
+                            <td className="px-3 py-2 text-center tabular-nums font-bold text-red-700 whitespace-nowrap">
+                              {formatWeight(item.shippingWeightKg)}
+                            </td>
+                            <td className="px-3 py-2 text-left tabular-nums text-slate-700 whitespace-nowrap">
+                              {new Intl.NumberFormat('fa-IR').format(
+                                item.unitPriceRial
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-left tabular-nums font-bold text-slate-900 whitespace-nowrap">
+                              {formatRial(item.totalRial)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-red-50/50 font-bold text-slate-950 border-t border-red-200 tabular-nums">
+                          <td colSpan={3} className="px-3 py-2 text-right">
+                            جمع کل مرجوعی ({toPersianDigits(returnDetails.items.length)}{' '}
+                            قلم)
+                          </td>
+                          <td className="px-3 py-2 text-center text-red-700 whitespace-nowrap">
+                            {formatWeight(returnDetails.totalWeightKg)}
+                          </td>
+                          <td className="px-3 py-2 text-left text-slate-400">—</td>
+                          <td className="px-3 py-2 text-left text-emerald-800 whitespace-nowrap">
+                            {formatRial(returnDetails.totalPriceRial)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {returnDetails.notes && (
+                    <div className="text-xs text-red-950 leading-relaxed pt-1">
+                      <span className="font-bold">علت و توضیحات مرجوعی: </span>
+                      {returnDetails.notes}
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
             {/* SECTION 1: محل تسویه (چک یا نقدی) */}
+            {!returnDetails && (
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -501,6 +632,7 @@ export const AccountingEntryDetailModal: React.FC<
                 </div>
               )}
             </section>
+            )}
 
             {/* SECTION 2: جزئیات سفارش و اقلام فاکتور */}
             {order && (

@@ -55,6 +55,25 @@ export interface AccountingCashPaymentDetails {
   paymentReceiptPhotoCaption?: string;
 }
 
+export interface AccountingReturnItem {
+  id: string;
+  productName: string;
+  driverWeightKg?: number;
+  shippingWeightKg: number;
+  unitPriceRial: number;
+  totalRial: number;
+}
+
+export interface AccountingReturnDetails {
+  scope: 'full_order' | 'partial';
+  totalWeightKg: number;
+  totalPriceRial: number;
+  driverName?: string;
+  shippingReceivedAt?: string;
+  notes: string;
+  items: AccountingReturnItem[];
+}
+
 export interface CustomerAccountingEntry {
   id: string;
   date: string;
@@ -68,6 +87,7 @@ export interface CustomerAccountingEntry {
   orderDetails?: AccountingOrderSummary;
   chequeDetails?: AccountingChequeDetails;
   cashDetails?: AccountingCashPaymentDetails;
+  returnDetails?: AccountingReturnDetails;
 }
 
 export interface CustomerContact {

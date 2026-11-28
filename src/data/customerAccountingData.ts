@@ -5,11 +5,14 @@ import {
   AccountingChequeDetails,
   AccountingOrderItem,
   AccountingOrderSummary,
+  AccountingReturnDetails,
+  AccountingReturnItem,
   CustomerAccountingEntry,
   CustomerRecord,
   SettlementMethod,
 } from '../types/customer';
 import { Order } from '../types/order';
+import { formatWeight } from '../utils/formatters';
 
 interface RawLedgerSpec {
   date: string;
@@ -34,6 +37,7 @@ interface RawLedgerSpec {
     amountRial?: number;
     driverName?: string;
   };
+  returnDetails?: AccountingReturnDetails;
 }
 
 const SAMPLE_PRODUCTS: Array<{ name: string; unitPrice: number }> = [
@@ -365,6 +369,7 @@ function buildLedger(
       orderDetails,
       chequeDetails: rowCheque,
       cashDetails: rowCash,
+      returnDetails: row.returnDetails,
     };
 
     return { entry, dateKey, seq };
@@ -1128,18 +1133,106 @@ const SEEDED_SPECS_BY_CUSTOMER_ID: Record<string, RawLedgerSpec[]> = {
   ],
 };
 
+function orderMatchesCustomer(order: Order, customer: CustomerRecord): boolean {
+  if (order.customerId && order.customerId === customer.id) return true;
+  const orderName = order.customerName.trim();
+  const custName = customer.name.trim();
+  if (!orderName || !custName) return false;
+  if (orderName === custName) return true;
+  const orderBase = orderName.split('/')[0]?.trim();
+  const custBase = custName.split('/')[0]?.trim();
+  return Boolean(orderBase && custBase && orderBase === custBase);
+}
+
+function buildLiveReturnSpecsForCustomer(
+  customer: CustomerRecord,
+  liveOrders?: Order[]
+): RawLedgerSpec[] {
+  if (!liveOrders || liveOrders.length === 0) return [];
+
+  const specs: RawLedgerSpec[] = [];
+
+  for (const order of liveOrders) {
+    if (order.status !== 'returned' || !order.returnRecord) continue;
+    const rec = order.returnRecord;
+    const isFinalized =
+      rec.stage === 'completed' ||
+      (rec.confirmations.production.confirmed &&
+        rec.confirmations.finance.confirmed &&
+        rec.confirmations.shipping.confirmed);
+    if (!isFinalized) continue;
+    if (!orderMatchesCustomer(order, customer)) continue;
+
+    const unitPriceById = new Map<string, number>();
+    order.items.forEach((it) => unitPriceById.set(it.id, it.unitPrice));
+
+    const returnItems: AccountingReturnItem[] = rec.items.map((ret) => {
+      const verifiedKg = Number((ret.shippingWeight ?? ret.weight).toFixed(2));
+      const unitPriceRial = ret.unitPrice ?? unitPriceById.get(ret.itemId) ?? 0;
+      const totalRial = ret.totalRial ?? Math.round(verifiedKg * unitPriceRial);
+      return {
+        id: ret.itemId,
+        productName: ret.productName,
+        driverWeightKg: ret.driverWeight,
+        shippingWeightKg: verifiedKg,
+        unitPriceRial,
+        totalRial,
+      };
+    });
+
+    const totalWeightKg = Number(
+      returnItems.reduce((sum, it) => sum + it.shippingWeightKg, 0).toFixed(2)
+    );
+    const totalPriceRial = returnItems.reduce((sum, it) => sum + it.totalRial, 0);
+    if (totalWeightKg <= 0) continue;
+
+    const scope: 'full_order' | 'partial' = rec.scope ?? 'partial';
+    const scopeLabel =
+      scope === 'full_order' ? 'مرجوعی کل سفارش' : 'مرجوعی بخشی از سفارش';
+
+    specs.push({
+      date: order.deliveryDate.replace(/-/g, '/'),
+      title: `مرجوعی سفارش ${order.code} — حجم: ${formatWeight(totalWeightKg)} (${scopeLabel})`,
+      creditRial: totalPriceRial,
+      kind: 'credit',
+      orderCode: order.code,
+      driverName: rec.driverName || order.driverName || undefined,
+      deliverySlot: order.deliverySlot,
+      statusLabel: 'مرجوعی تایید نهایی‌شده (ثبت حجم و قیمت)',
+      returnDetails: {
+        scope,
+        totalWeightKg,
+        totalPriceRial,
+        driverName: rec.driverName || order.driverName || undefined,
+        shippingReceivedAt: rec.shippingReceivedAt ?? rec.timestamp,
+        notes: rec.notes,
+        items: returnItems,
+      },
+    });
+  }
+
+  return specs;
+}
+
 /**
  * Returns read-only Excel-style accounting ledger entries for any customer,
  * enriched with order items, settlement method (cash vs cheque), cheque info,
- * and driver invoice/receipt photos.
+ * driver invoice/receipt photos, and finalized return volume/price records.
  */
 export function getCustomerAccountingEntries(
   customer: CustomerRecord,
   liveOrders?: Order[]
 ): CustomerAccountingEntry[] {
+  const liveReturnSpecs = buildLiveReturnSpecsForCustomer(customer, liveOrders);
+
   const seeded = SEEDED_SPECS_BY_CUSTOMER_ID[customer.id];
   if (seeded) {
-    return buildLedger(customer.id, customer, seeded, liveOrders);
+    return buildLedger(
+      customer.id,
+      customer,
+      [...seeded, ...liveReturnSpecs],
+      liveOrders
+    );
   }
 
   const baseOrderNum = String(
@@ -1184,6 +1277,7 @@ export function getCustomerAccountingEntries(
           title: 'مانده بدهی جاری طرف حساب',
           kind: 'balance',
         },
+        ...liveReturnSpecs,
       ],
       liveOrders
     );
@@ -1230,6 +1324,7 @@ export function getCustomerAccountingEntries(
         title: 'مانده بدهی جاری طرف حساب',
         kind: 'balance',
       },
+      ...liveReturnSpecs,
     ],
     liveOrders
   );

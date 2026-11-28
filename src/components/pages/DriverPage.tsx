@@ -10,6 +10,7 @@ import {
   Navigation,
   Phone,
   Printer,
+  RotateCcw,
   Search,
   Undo2,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ interface DriverPageProps {
   onOpenLocationModal: (order: Order, mode: LocationModalMode) => void;
   onCallCustomer: (order: Order) => void;
   onOpenReturnToSales: (order: Order) => void;
+  onOpenDriverReturn: (order: Order) => void;
 }
 
 type DriverFilter =
@@ -40,7 +42,8 @@ type DriverFilter =
   | 'rejected_docs'
   | 'pending'
   | 'no_location'
-  | 'completed';
+  | 'completed'
+  | 'returned';
 
 function getDocCount(order: Order): number {
   let count = 0;
@@ -51,7 +54,15 @@ function getDocCount(order: Order): number {
 
 function isDriverDocsRejected(order: Order): boolean {
   return Boolean(
-    order.driverDelivery?.financeRejected && !order.driverDelivery?.sentToFinance
+    order.status === 'delivered' &&
+      order.driverDelivery?.financeRejected &&
+      !order.driverDelivery?.sentToFinance
+  );
+}
+
+function isDriverInitiatedReturn(order: Order): boolean {
+  return (
+    order.status === 'returned' && order.returnRecord?.initiatedBy === 'driver'
   );
 }
 
@@ -63,22 +74,30 @@ export const DriverPage: React.FC<DriverPageProps> = ({
   onOpenLocationModal,
   onCallCustomer,
   onOpenReturnToSales,
+  onOpenDriverReturn,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<DriverFilter>('all');
   const [driverFilter, setDriverFilter] = useState<string>('all');
 
-  // Show ONLY orders approved and handed off by Shipping (واحد ارسال),
+  // Show orders approved and handed off by Shipping (واحد ارسال) + driver-initiated returns,
   // sorted by Delivery Time Slot (بازه زمانی ارسال), with Finance-rejected photos pinned at top.
   const slotSortedDayOrders = useMemo(() => {
     return orders
-      .filter((order) => order.status === 'delivered')
+      .filter(
+        (order) =>
+          order.status === 'delivered' || isDriverInitiatedReturn(order)
+      )
       .slice()
       .sort((a, b) => {
         const aRej = isDriverDocsRejected(a) ? 0 : 1;
         const bRej = isDriverDocsRejected(b) ? 0 : 1;
         if (aRej !== bRej) return aRej - bRej;
         if (aRej === 0 && bRej === 0) return b.lastActionAt - a.lastActionAt;
+
+        const aRet = isDriverInitiatedReturn(a) ? 1 : 0;
+        const bRet = isDriverInitiatedReturn(b) ? 1 : 0;
+        if (aRet !== bRet) return aRet - bRet;
 
         const slotDiff =
           getDeliverySlotSortKey(a.deliverySlot) -
@@ -95,28 +114,40 @@ export const DriverPage: React.FC<DriverPageProps> = ({
   );
 
   const missingLocationCount = useMemo(
-    () => slotSortedDayOrders.filter((o) => !o.customerLocation).length,
+    () =>
+      slotSortedDayOrders.filter(
+        (o) => !isDriverInitiatedReturn(o) && !o.customerLocation
+      ).length,
     [slotSortedDayOrders]
   );
 
   const completedCount = useMemo(
     () =>
-      slotSortedDayOrders.filter((o) => o.driverDelivery?.sentToFinance).length,
+      slotSortedDayOrders.filter(
+        (o) => !isDriverInitiatedReturn(o) && o.driverDelivery?.sentToFinance
+      ).length,
+    [slotSortedDayOrders]
+  );
+
+  const returnedCount = useMemo(
+    () => slotSortedDayOrders.filter(isDriverInitiatedReturn).length,
     [slotSortedDayOrders]
   );
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return slotSortedDayOrders.filter((order) => {
-      const completed = Boolean(order.driverDelivery?.sentToFinance);
+      const isReturned = isDriverInitiatedReturn(order);
+      const completed = !isReturned && Boolean(order.driverDelivery?.sentToFinance);
       const rejectedDocs = isDriverDocsRejected(order);
 
       const matchesFilter =
         filter === 'all' ||
         (filter === 'rejected_docs' && rejectedDocs) ||
-        (filter === 'pending' && !completed) ||
-        (filter === 'no_location' && !order.customerLocation) ||
-        (filter === 'completed' && completed);
+        (filter === 'pending' && !isReturned && !completed) ||
+        (filter === 'no_location' && !isReturned && !order.customerLocation) ||
+        (filter === 'completed' && completed) ||
+        (filter === 'returned' && isReturned);
 
       if (!matchesFilter) return false;
 
@@ -204,6 +235,16 @@ export const DriverPage: React.FC<DriverPageProps> = ({
               </span>
             </>
           )}
+          {returnedCount > 0 && (
+            <>
+              <span aria-hidden="true" className="text-slate-300">
+                ·
+              </span>
+              <span className="text-red-700 font-bold">
+                مرجوعی: {toPersianDigits(returnedCount)}
+              </span>
+            </>
+          )}
         </div>
       </section>
 
@@ -253,6 +294,14 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                 { id: 'pending', label: 'در انتظار تحویل' },
                 { id: 'no_location', label: 'بدون لوکیشن' },
                 { id: 'completed', label: 'تکمیل‌شده' },
+                {
+                  id: 'returned',
+                  label:
+                    returnedCount > 0
+                      ? `مرجوعی (${toPersianDigits(returnedCount)})`
+                      : 'مرجوعی',
+                  isDanger: returnedCount > 0,
+                },
               ] as Array<{ id: DriverFilter; label: string; isDanger?: boolean }>
             ).map((f) => (
               <button
@@ -301,8 +350,16 @@ export const DriverPage: React.FC<DriverPageProps> = ({
           </div>
         ) : (
           filteredOrders.map((order, idx) => {
+            const isReturned = isDriverInitiatedReturn(order);
+            const returnRecord = order.returnRecord;
+            const returnTotalKg = Number(
+              (returnRecord?.items ?? [])
+                .reduce((sum, it) => sum + (it.shippingWeight ?? it.weight), 0)
+                .toFixed(2)
+            );
             const docCount = getDocCount(order);
-            const completed = Boolean(order.driverDelivery?.sentToFinance);
+            const completed =
+              !isReturned && Boolean(order.driverDelivery?.sentToFinance);
             const financeVerified = Boolean(order.driverDelivery?.financeVerified);
             const rejectedDocs = isDriverDocsRejected(order);
             const hasLocation = Boolean(order.customerLocation);
@@ -312,13 +369,15 @@ export const DriverPage: React.FC<DriverPageProps> = ({
               rejectedDocsCount > 0 &&
               idx === rejectedDocsCount;
 
-            const cardBorderClass = rejectedDocs
-              ? 'border-2 border-red-500 bg-red-50/35 shadow-md ring-2 ring-red-500/20'
-              : completed
-                ? 'border border-emerald-400 bg-emerald-50/20'
-                : docCount === 2
-                  ? 'border-2 border-[#0f5864] bg-white shadow-sm'
-                  : 'border border-[#7a9cbf] bg-white';
+            const cardBorderClass = isReturned
+              ? 'border-2 border-red-400 bg-red-50/25'
+              : rejectedDocs
+                ? 'border-2 border-red-500 bg-red-50/35 shadow-md ring-2 ring-red-500/20'
+                : completed
+                  ? 'border border-emerald-400 bg-emerald-50/20'
+                  : docCount === 2
+                    ? 'border-2 border-[#0f5864] bg-white shadow-sm'
+                    : 'border border-[#7a9cbf] bg-white';
 
             return (
               <React.Fragment key={order.id}>
@@ -336,8 +395,25 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                     printingOrderId === order.id ? 'print-target' : ''
                   } rounded-2xl sm:rounded-xl overflow-hidden transition-all ${cardBorderClass}`}
                 >
+                  {/* RED BANNER when Driver-initiated Return */}
+                  {isReturned && returnRecord && (
+                    <div className="no-print px-4 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
+                      <span className="inline-flex items-center gap-1.5">
+                        <RotateCcw className="w-4 h-4 shrink-0" />
+                        {returnRecord.stage === 'awaiting_shipping_receive'
+                          ? 'مرجوعی ثبت‌شده — در انتظار تحویل بار و ثبت وزن در بخش ارسال'
+                          : returnRecord.stage === 'completed'
+                            ? 'مرجوعی تایید نهایی شد (ارسال، تولید و صدور فاکتور)'
+                            : 'بار تحویل بخش ارسال شد — در انتظار تایید تولید و صدور فاکتور'}
+                      </span>
+                      <span className="tabular-nums text-[11px] opacity-95">
+                        حجم مرجوعی: {formatWeight(returnTotalKg)}
+                      </span>
+                    </div>
+                  )}
+
                   {/* RED TOP PRIORITY BANNER when Finance Rejected Driver Photos */}
-                  {rejectedDocs && (
+                  {!isReturned && rejectedDocs && (
                     <div className="no-print px-4 py-2.5 bg-red-600 text-white space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
@@ -360,7 +436,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                   )}
 
                   {/* Emerald Banner when Completed */}
-                  {completed && (
+                  {!isReturned && completed && (
                     <div className="no-print px-4 py-2 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                       <span className="inline-flex items-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -375,7 +451,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                   )}
 
                   {/* Teal Banner when Ready to Complete */}
-                  {!completed && !rejectedDocs && docCount === 2 && (
+                  {!isReturned && !completed && !rejectedDocs && docCount === 2 && (
                     <div className="no-print px-4 py-2 bg-[#0f5864] text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                       <span className="inline-flex items-center gap-1.5">
                         <Camera className="w-4 h-4 shrink-0" />
@@ -440,11 +516,11 @@ export const DriverPage: React.FC<DriverPageProps> = ({
 
                         <div className="col-span-2 md:col-span-1">
                           <span className="block text-[11px] text-slate-500 mb-0.5">
-                            مدارک تحویل
+                            {isReturned ? 'وضعیت مرجوعی' : 'مدارک تحویل'}
                           </span>
                           <span
                             className={`tabular-nums font-bold text-xs ${
-                              rejectedDocs
+                              isReturned || rejectedDocs
                                 ? 'text-red-700'
                                 : completed
                                   ? 'text-emerald-700'
@@ -455,17 +531,21 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                                       : 'text-slate-500'
                             }`}
                           >
-                            {rejectedDocs
-                              ? 'رد شده · عکاسی مجدد'
-                              : completed
-                                ? 'ارسال‌شده به فاکتور'
-                                : docCount === 2
-                                  ? '۲ از ۲ · آماده اتمام'
-                                  : docCount === 1
-                                    ? order.driverDelivery?.invoicePhoto
-                                      ? '۱ از ۲ · رسید باقی‌مانده'
-                                      : '۱ از ۲ · فاکتور باقی‌مانده'
-                                    : '۰ از ۲ · ثبت عکس'}
+                            {isReturned
+                              ? returnRecord?.scope === 'full_order'
+                                ? 'مرجوعی کل سفارش'
+                                : 'مرجوعی بخشی از سفارش'
+                              : rejectedDocs
+                                ? 'رد شده · عکاسی مجدد'
+                                : completed
+                                  ? 'ارسال‌شده به فاکتور'
+                                  : docCount === 2
+                                    ? '۲ از ۲ · آماده اتمام'
+                                    : docCount === 1
+                                      ? order.driverDelivery?.invoicePhoto
+                                        ? '۱ از ۲ · رسید باقی‌مانده'
+                                        : '۱ از ۲ · فاکتور باقی‌مانده'
+                                      : '۰ از ۲ · ثبت عکس'}
                           </span>
                         </div>
                       </div>
@@ -516,71 +596,94 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                     </div>
                   </button>
 
-                  {/* Action Footer: Location/Navigation + Call + Photos */}
+                  {/* Action Footer: Location/Navigation + Call + Photos + Return */}
                   <div className="no-print px-4 sm:px-5 pb-3.5 pt-1 grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2">
-                    {/* Primary Location / Navigation Button */}
-                    {hasLocation ? (
+                    {isReturned ? (
                       <button
                         type="button"
-                        onClick={() => onOpenLocationModal(order, 'navigate')}
-                        className="col-span-2 sm:col-span-1 min-h-[46px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                        onClick={() => onSelectOrder(order.id)}
+                        className="col-span-2 sm:col-span-1 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-300 hover:bg-red-600 hover:text-white transition-all whitespace-nowrap"
                       >
-                        <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                        مسیریابی به سمت مشتری
+                        <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                        مشاهده جزئیات و وضعیت مرجوعی
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={() => onOpenLocationModal(order, 'pick')}
-                        className="col-span-2 sm:col-span-1 min-h-[46px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-900 border border-amber-400 hover:bg-amber-500 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
-                      >
-                        <MapPinPlus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                        ثبت لوکیشن روی نقشه
-                      </button>
+                      <>
+                        {/* Primary Location / Navigation Button */}
+                        {hasLocation ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenLocationModal(order, 'navigate')}
+                            className="col-span-2 sm:col-span-1 min-h-[46px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                          >
+                            <Navigation className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                            مسیریابی به سمت مشتری
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => onOpenLocationModal(order, 'pick')}
+                            className="col-span-2 sm:col-span-1 min-h-[46px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-900 border border-amber-400 hover:bg-amber-500 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
+                          >
+                            <MapPinPlus className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                            ثبت لوکیشن روی نقشه
+                          </button>
+                        )}
+
+                        {/* Call Customer */}
+                        <a
+                          href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onCallCustomer(order);
+                          }}
+                          className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition-all whitespace-nowrap"
+                        >
+                          <Phone className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                          تماس با مشتری
+                        </a>
+
+                        {/* Capture / View Photos */}
+                        <button
+                          type="button"
+                          onClick={() => onSelectOrder(order.id)}
+                          className={`min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold border active:scale-[0.98] transition-all whitespace-nowrap ${
+                            rejectedDocs
+                              ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
+                              : completed
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                                : 'bg-[#0f5864] sm:bg-white text-white sm:text-[#0f5864] border-[#0f5864] hover:bg-[#0f5864] hover:text-white'
+                          }`}
+                        >
+                          <Camera className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                          {rejectedDocs
+                            ? 'ثبت عکس مجدد'
+                            : completed
+                              ? 'مشاهده مدارک'
+                              : 'عکس فاکتور و رسید'}
+                        </button>
+
+                        {/* Driver Return Order */}
+                        <button
+                          type="button"
+                          onClick={() => onOpenDriverReturn(order)}
+                          className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
+                        >
+                          <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                          مرجوع کردن سفارش
+                        </button>
+
+                        {/* Return Order to Sales */}
+                        <button
+                          type="button"
+                          onClick={() => onOpenReturnToSales(order)}
+                          className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
+                        >
+                          <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                          برگشت به فروش
+                        </button>
+                      </>
                     )}
-
-                    {/* Call Customer */}
-                    <a
-                      href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onCallCustomer(order);
-                      }}
-                      className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] transition-all whitespace-nowrap"
-                    >
-                      <Phone className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                      تماس با مشتری
-                    </a>
-
-                    {/* Capture / View Photos */}
-                    <button
-                      type="button"
-                      onClick={() => onSelectOrder(order.id)}
-                      className={`min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold border active:scale-[0.98] transition-all whitespace-nowrap ${
-                        rejectedDocs
-                          ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
-                          : completed
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                            : 'bg-[#0f5864] sm:bg-white text-white sm:text-[#0f5864] border-[#0f5864] hover:bg-[#0f5864] hover:text-white'
-                      }`}
-                    >
-                      <Camera className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                      {rejectedDocs
-                        ? 'ثبت عکس مجدد'
-                        : completed
-                          ? 'مشاهده مدارک'
-                          : 'عکس فاکتور و رسید'}
-                    </button>
-
-                    {/* Return Order to Sales */}
-                    <button
-                      type="button"
-                      onClick={() => onOpenReturnToSales(order)}
-                      className="col-span-2 sm:col-span-1 min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
-                    >
-                      <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-                      برگشت سفارش به فروش
-                    </button>
                   </div>
 
                   {/* Print-only Summary Table */}

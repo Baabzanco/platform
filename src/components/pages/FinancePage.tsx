@@ -55,6 +55,7 @@ function isWaitingProd(order: Order): boolean {
 function isPendingReturnConfirmInFinance(order: Order): boolean {
   return (
     order.status === 'returned' &&
+    order.returnRecord?.stage !== 'awaiting_shipping_receive' &&
     !(order.returnRecord?.confirmations.finance.confirmed ?? false)
   );
 }

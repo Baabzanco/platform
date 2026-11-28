@@ -79,14 +79,33 @@ export interface ReturnDepartmentConfirmation {
   confirmedAt?: string;
 }
 
+export type ReturnScope = 'full_order' | 'partial';
+
+export type ReturnWorkflowStage =
+  | 'awaiting_shipping_receive'
+  | 'awaiting_prod_and_finance'
+  | 'completed';
+
+export interface ReturnItemEntry {
+  itemId: string;
+  productName: string;
+  weight: number;
+  driverWeight?: number;
+  shippingWeight?: number;
+  unitPrice?: number;
+  totalRial?: number;
+}
+
 export interface ReturnRecord {
-  items: Array<{
-    itemId: string;
-    productName: string;
-    weight: number;
-  }>;
+  initiatedBy?: 'driver' | 'shipping';
+  driverName?: string;
+  scope?: ReturnScope;
+  stage?: ReturnWorkflowStage;
+  items: ReturnItemEntry[];
   notes: string;
   timestamp: string;
+  shippingReceivedAt?: string;
+  shippingNote?: string;
   confirmations: Record<WorkflowDepartment, ReturnDepartmentConfirmation>;
 }
 

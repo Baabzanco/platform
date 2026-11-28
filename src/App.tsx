@@ -18,10 +18,12 @@ import {
   DeliveryModal,
   DiscrepancyModal,
   DriverDocsRejectModal,
+  DriverReturnModal,
   RejectModal,
   ResetConfirmModal,
   ReturnModal,
   ReturnToSalesModal,
+  ShippingReturnReceiveModal,
   WeightModal,
 } from './components/modals/OrderModals';
 import { AccessControlPage } from './components/pages/AccessControlPage';
@@ -75,6 +77,8 @@ export default function App() {
     submitDiscrepancy,
     submitDelivery,
     submitReturn,
+    submitDriverReturn,
+    receiveReturnInShipping,
     confirmReturnByDepartment,
     rejectOrder,
     saveCustomerLocation,
@@ -196,6 +200,9 @@ export default function App() {
   const [discrepancyOrder, setDiscrepancyOrder] = useState<Order | null>(null);
   const [deliveryOrder, setDeliveryOrder] = useState<Order | null>(null);
   const [returnOrder, setReturnOrder] = useState<Order | null>(null);
+  const [driverReturnOrder, setDriverReturnOrder] = useState<Order | null>(null);
+  const [shippingReturnReceiveOrder, setShippingReturnReceiveOrder] =
+    useState<Order | null>(null);
   const [locationModal, setLocationModal] = useState<{
     orderId: string;
     mode: LocationModalMode;
@@ -224,7 +231,14 @@ export default function App() {
     const deptForSeen: WorkflowDepartment = activeWorkflowDept ?? 'production';
 
     for (const order of orders) {
-      if (activePage === 'driver' && order.status !== 'delivered') {
+      if (
+        activePage === 'driver' &&
+        order.status !== 'delivered' &&
+        !(
+          order.status === 'returned' &&
+          order.returnRecord?.initiatedBy === 'driver'
+        )
+      ) {
         continue;
       }
       if (
@@ -297,6 +311,8 @@ export default function App() {
     discrepancyOrder !== null ||
     deliveryOrder !== null ||
     returnOrder !== null ||
+    driverReturnOrder !== null ||
+    shippingReturnReceiveOrder !== null ||
     locationModal !== null ||
     resetOpen;
 
@@ -556,6 +572,7 @@ export default function App() {
               onOpenReturnToSales={(order) =>
                 setReturnToSalesTarget({ order, source: 'driver' })
               }
+              onOpenDriverReturn={(order) => setDriverReturnOrder(order)}
             />
           )}
 
@@ -722,6 +739,9 @@ export default function App() {
           onOpenDiscrepancy={(order) => setDiscrepancyOrder(order)}
           onOpenDelivery={(order) => setDeliveryOrder(order)}
           onOpenReturn={(order) => setReturnOrder(order)}
+          onOpenShippingReturnReceive={(order) =>
+            setShippingReturnReceiveOrder(order)
+          }
           onDriverMissingWarning={handleDriverMissingWarning}
           onOpenReject={(order, source) => setRejectTarget({ order, source })}
           onOpenReturnToSales={(order, source) =>
@@ -738,9 +758,20 @@ export default function App() {
       {/* Driver Panel Order Action Popup Modal */}
       {activePage === 'driver' && (
         <DriverOrderModal
-          order={selectedOrder?.status === 'delivered' ? selectedOrder : null}
+          order={
+            selectedOrder &&
+            (selectedOrder.status === 'delivered' ||
+              (selectedOrder.status === 'returned' &&
+                selectedOrder.returnRecord?.initiatedBy === 'driver'))
+              ? selectedOrder
+              : null
+          }
           access={FULL_ACCESS}
-          disableEscape={locationModal !== null || returnToSalesTarget !== null}
+          disableEscape={
+            locationModal !== null ||
+            returnToSalesTarget !== null ||
+            driverReturnOrder !== null
+          }
           onClose={() => setSelectedOrderId(null)}
           onCallCustomer={handleCallCustomer}
           onOpenLocationModal={(order, mode) =>
@@ -752,6 +783,7 @@ export default function App() {
           onOpenReturnToSales={(order) =>
             setReturnToSalesTarget({ order, source: 'driver' })
           }
+          onOpenDriverReturn={(order) => setDriverReturnOrder(order)}
         />
       )}
 
@@ -840,6 +872,32 @@ export default function App() {
         }}
       />
 
+      <DriverReturnModal
+        open={driverReturnOrder !== null}
+        order={driverReturnOrder}
+        onClose={() => setDriverReturnOrder(null)}
+        onSubmit={(scope, returnedWeights, notes) => {
+          if (driverReturnOrder) {
+            submitDriverReturn(driverReturnOrder.id, scope, returnedWeights, notes);
+          }
+        }}
+      />
+
+      <ShippingReturnReceiveModal
+        open={shippingReturnReceiveOrder !== null}
+        order={shippingReturnReceiveOrder}
+        onClose={() => setShippingReturnReceiveOrder(null)}
+        onSubmit={(shippingWeights, shippingNote) => {
+          if (shippingReturnReceiveOrder) {
+            receiveReturnInShipping(
+              shippingReturnReceiveOrder.id,
+              shippingWeights,
+              shippingNote
+            );
+          }
+        }}
+      />
+
       {/* Sales Specialist: New Invoice / Edit Returned Order Modal */}
       <NewInvoiceModal
         open={invoiceModalState.open}
@@ -888,6 +946,8 @@ export default function App() {
           setSelectedCustomerId(null);
           setInvoiceModalState({ open: false, editingOrder: null });
           setReturnToSalesTarget(null);
+          setDriverReturnOrder(null);
+          setShippingReturnReceiveOrder(null);
           setWeekOffset(0);
           setSelectedDateKey(DEFAULT_SELECTED_DATE_KEY);
           resetDemoData();
