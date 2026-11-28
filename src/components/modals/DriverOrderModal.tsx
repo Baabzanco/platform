@@ -115,6 +115,23 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
     0
   );
 
+  const totalWeight = order.items.reduce(
+    (sum, item) => sum + getShippingWeight(item),
+    0
+  );
+  const netDeliveredTotalKg = Number(
+    order.items
+      .reduce(
+        (sum, item) =>
+          sum + Math.max(0, getShippingWeight(item) - (item.returnedWeight ?? 0)),
+        0
+      )
+      .toFixed(2)
+  );
+  const isPartialReturn = isReturned && netDeliveredTotalKg > 0.001;
+  const isFullReturn = isReturned && !isPartialReturn;
+  const needsDeliveryDocs = !isFullReturn;
+
   const invoicePhoto = order.driverDelivery?.invoicePhoto;
   const paymentReceiptPhoto = order.driverDelivery?.paymentReceiptPhoto;
   const hasLocation = Boolean(order.customerLocation);
@@ -122,7 +139,7 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   const completed = Boolean(order.driverDelivery?.sentToFinance);
   const financeVerified = Boolean(order.driverDelivery?.financeVerified);
   const financeRejected = Boolean(
-    !isReturned && order.driverDelivery?.financeRejected && !completed
+    needsDeliveryDocs && order.driverDelivery?.financeRejected && !completed
   );
   const needsInvoiceRetake = Boolean(
     financeRejected && order.driverDelivery?.rejectedDocs?.invoice
@@ -148,11 +165,6 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
   } else if (!paymentReceiptPhoto) {
     missingRequirements.push('ثبت عکس رسید پرداخت');
   }
-
-  const totalWeight = order.items.reduce(
-    (sum, item) => sum + getShippingWeight(item),
-    0
-  );
 
   const handleFileChange = async (
     docType: 'invoice' | 'paymentReceipt',
@@ -201,11 +213,17 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             <div className="px-4 sm:px-5 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
               <span className="inline-flex items-center gap-2">
                 <RotateCcw className="w-4 h-4 shrink-0" />
-                {returnStage === 'awaiting_shipping_receive'
-                  ? 'مرجوعی ثبت شد — در انتظار تحویل بار و ثبت وزن توسط بخش ارسال'
-                  : returnStage === 'completed'
-                    ? 'مرجوعی توسط ارسال، تولید و صدور فاکتور تایید نهایی شد'
-                    : 'بار در بخش ارسال تحویل گرفته شد — در انتظار تایید هم‌زمان تولید و صدور فاکتور'}
+                {isPartialReturn
+                  ? returnStage === 'awaiting_shipping_receive'
+                    ? 'مرجوعی جزئی ثبت شد (در انتظار ارسال) — تحویل باقی‌مانده و ارسال عکس فاکتور و رسید الزامی است'
+                    : returnStage === 'completed'
+                      ? 'مرجوعی جزئی تایید نهایی شد'
+                      : 'مرجوعی جزئی در ارسال تحویل گرفته شد — در انتظار تایید تولید و صدور فاکتور'
+                  : returnStage === 'awaiting_shipping_receive'
+                    ? 'مرجوعی کل سفارش ثبت شد — در انتظار تحویل بار و ثبت وزن توسط بخش ارسال'
+                    : returnStage === 'completed'
+                      ? 'مرجوعی کل سفارش توسط ارسال، تولید و صدور فاکتور تایید نهایی شد'
+                      : 'بار مرجوعی در بخش ارسال تحویل گرفته شد — در انتظار تایید هم‌زمان تولید و صدور فاکتور'}
               </span>
               <span className="tabular-nums opacity-95 text-[11px]">
                 {returnRecord.timestamp}
@@ -213,11 +231,11 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             </div>
           )}
 
-          {!isReturned && financeRejected && (
-            <div className="px-4 sm:px-5 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
+          {needsDeliveryDocs && financeRejected && (
+            <div className="px-4 sm:px-5 py-2.5 bg-red-700 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
               <span className="inline-flex items-center gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
-                مدارک توسط صدور فاکتور رد شد — لطفاً مجدد عکس بگیرید و ارسال کنید
+                مدارک تحویل توسط صدور فاکتور رد شد — لطفاً مجدد عکس بگیرید و ارسال کنید
               </span>
               {order.driverDelivery?.financeRejectedAt && (
                 <span className="tabular-nums opacity-95 text-[11px]">
@@ -227,13 +245,17 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
             </div>
           )}
 
-          {!isReturned && completed && (
+          {needsDeliveryDocs && completed && (
             <div className="px-4 sm:px-5 py-2.5 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold shrink-0">
               <span className="inline-flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
                 {financeVerified
-                  ? 'تحویل تکمیل و مدارک توسط واحد صدور فاکتور تایید نهایی شد'
-                  : 'اتمام تحویل ثبت شد و مدارک به صدور فاکتور ارسال گردید'}
+                  ? isPartialReturn
+                    ? 'مدارک بخش تحویل‌داده‌شده توسط واحد صدور فاکتور تایید نهایی شد'
+                    : 'تحویل تکمیل و مدارک توسط واحد صدور فاکتور تایید نهایی شد'
+                  : isPartialReturn
+                    ? 'مدارک بخش تحویل‌داده‌شده ثبت و به صدور فاکتور ارسال گردید'
+                    : 'اتمام تحویل ثبت شد و مدارک به صدور فاکتور ارسال گردید'}
               </span>
               <span className="tabular-nums opacity-95 text-[11px]">
                 {order.driverDelivery?.completedAt}
@@ -426,26 +448,86 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
             {/* Cargo Summary */}
             <div className="px-4 sm:px-5 py-3.5 bg-slate-50/50">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span className="text-xs font-bold text-slate-700 inline-flex items-center gap-1.5">
                   <Package className="w-4 h-4 text-[#0f5864]" />
-                  اقلام سفارش جهت تحویل
+                  {isPartialReturn
+                    ? 'تفکیک اقلام تحویلی به مشتری و مرجوعی'
+                    : 'اقلام سفارش جهت تحویل'}
                 </span>
                 <span className="tabular-nums text-xs text-slate-600">
-                  {toPersianDigits(order.items.length)} قلم · جمع وزن:{' '}
-                  <strong className="text-slate-900">
-                    {formatWeight(totalWeight)}
-                  </strong>
+                  {isPartialReturn ? (
+                    <>
+                      تحویل خالص به مشتری:{' '}
+                      <strong className="text-emerald-700">
+                        {formatWeight(netDeliveredTotalKg)}
+                      </strong>
+                      {' · '}
+                      مرجوعی:{' '}
+                      <strong className="text-red-700">
+                        {formatWeight(returnTotalKg)}
+                      </strong>
+                    </>
+                  ) : (
+                    <>
+                      {toPersianDigits(order.items.length)} قلم · جمع وزن:{' '}
+                      <strong className="text-slate-900">
+                        {formatWeight(totalWeight)}
+                      </strong>
+                    </>
+                  )}
                 </span>
               </div>
-              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-700">
-                {order.items.map((item) => (
-                  <span key={item.id} className="tabular-nums">
-                    <strong className="text-slate-900">{item.productName}</strong>:{' '}
-                    {formatWeight(getShippingWeight(item))}
-                  </span>
-                ))}
-              </div>
+
+              {isPartialReturn ? (
+                <div className="space-y-1.5">
+                  {order.items.map((item) => {
+                    const shipped = getShippingWeight(item);
+                    const retKg = item.returnedWeight ?? 0;
+                    const deliveredNet = Number(
+                      Math.max(0, shipped - retKg).toFixed(2)
+                    );
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex flex-wrap items-center justify-between gap-2 text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 tabular-nums"
+                      >
+                        <span className="font-bold text-slate-900">
+                          {item.productName}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="text-slate-500">
+                            خروجی: {formatWeight(shipped)}
+                          </span>
+                          {retKg > 0 && (
+                            <span className="text-red-700 font-semibold">
+                              مرجوعی: {formatWeight(retKg)}
+                            </span>
+                          )}
+                          <span
+                            className={`font-bold ${
+                              deliveredNet > 0
+                                ? 'text-emerald-700'
+                                : 'text-slate-400'
+                            }`}
+                          >
+                            تحویل به مشتری: {formatWeight(deliveredNet)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-700">
+                  {order.items.map((item) => (
+                    <span key={item.id} className="tabular-nums">
+                      <strong className="text-slate-900">{item.productName}</strong>:{' '}
+                      {formatWeight(getShippingWeight(item))}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Driver Return Summary (when returned) */}
@@ -455,13 +537,10 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                   <span className="inline-flex items-center gap-1.5">
                     <RotateCcw className="w-4 h-4 shrink-0" />
                     جزئیات مرجوعی ثبت‌شده (
-                    {returnRecord.scope === 'full_order'
-                      ? 'کل سفارش'
-                      : 'بخشی از سفارش'}
-                    )
+                    {isPartialReturn ? 'بخشی از سفارش' : 'کل سفارش'})
                   </span>
                   <span className="tabular-nums">
-                    حجم: {formatWeight(returnTotalKg)}
+                    حجم مرجوعی: {formatWeight(returnTotalKg)}
                     {returnTotalRial > 0
                       ? ` · مبلغ: ${formatRial(returnTotalRial)}`
                       : ''}
@@ -494,18 +573,22 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
               </div>
             )}
 
-            {/* Two Required Document Capture / Upload Slots */}
-            {!isReturned && (
+            {/* Two Required Document Capture / Upload Slots (active for delivered AND partial returns) */}
+            {needsDeliveryDocs && (
             <div className="px-4 sm:px-5 py-4 sm:py-5 bg-white">
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3.5">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">
-                    ثبت و آپلود مدارک تحویل
+                    {isPartialReturn
+                      ? 'ثبت و آپلود مدارک بخش تحویل‌داده‌شده به مشتری'
+                      : 'ثبت و آپلود مدارک تحویل'}
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
                     {financeRejected
                       ? 'عکس موردنظر را با کیفیت و نور مناسب مجدداً ثبت کنید و در صورت نبود لوکیشن، موقعیت مشتری را ثبت کرده و سپس ارسال مجدد را بزنید.'
-                      : 'پس از ثبت لوکیشن مشتری و آپلود عکس فاکتور و رسید پرداخت، دکمه «اتمام تحویل» فعال می‌شود.'}
+                      : isPartialReturn
+                        ? `به‌دلیل مرجوعی جزئی، برای ${formatWeight(netDeliveredTotalKg)} بار تحویل‌داده‌شده به مشتری همچنان ثبت لوکیشن و ارسال عکس فاکتور و رسید پرداخت الزامی است.`
+                        : 'پس از ثبت لوکیشن مشتری و آپلود عکس فاکتور و رسید پرداخت، دکمه «اتمام تحویل» فعال می‌شود.'}
                   </p>
                 </div>
                 <span className="tabular-nums text-xs font-bold text-[#0f5864]">
@@ -793,14 +876,14 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
 
           {/* Sticky Action Footer (Full-Width Thumb CTA on Mobile) */}
           <div className="px-4 sm:px-5 pt-3.5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 pb-modal-safe shrink-0">
-            {isReturned ? (
+            {isFullReturn ? (
               <>
                 <span className="inline-flex items-center gap-2 text-xs font-bold text-red-800">
                   <RotateCcw className="w-4 h-4 text-red-600 shrink-0" />
                   {returnStage === 'awaiting_shipping_receive'
-                    ? 'سفارش مرجوعی به بخش ارسال ارجاع شده و منتظر تحویل مجدد بار است.'
+                    ? 'مرجوعی کل سفارش به بخش ارسال ارجاع شده و منتظر تحویل مجدد بار است.'
                     : returnStage === 'completed'
-                      ? 'مرجوعی توسط تمامی بخش‌ها تایید و در حسابداری ثبت شد.'
+                      ? 'مرجوعی کل سفارش توسط تمامی بخش‌ها تایید و در حسابداری ثبت شد.'
                       : 'بخش ارسال بار مرجوعی را تحویل گرفت و برای تولید و صدور فاکتور ارسال کرد.'}
                 </span>
                 <button
@@ -815,25 +898,33 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
               <>
                 <span className="inline-flex items-center gap-2 text-xs font-bold text-emerald-800">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  تحویل تکمیل شد و عکس فاکتور و رسید پرداخت به بخش صدور فاکتور ارسال گردید.
+                  {isPartialReturn
+                    ? returnStage === 'awaiting_shipping_receive'
+                      ? 'مدارک بخش تحویل‌داده‌شده ثبت شد؛ پس از تایید بار مرجوعی توسط واحد ارسال، برای صدور فاکتور ارسال می‌شود.'
+                      : 'مدارک بخش تحویل‌داده‌شده ثبت و به واحد صدور فاکتور ارسال گردید.'
+                    : 'تحویل تکمیل شد و عکس فاکتور و رسید پرداخت به بخش صدور فاکتور ارسال گردید.'}
                 </span>
                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenDriverReturn(order)}
-                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                    مرجوع کردن سفارش
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenReturnToSales(order)}
-                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
-                    برگشت سفارش به فروش
-                  </button>
+                  {!isPartialReturn && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDriverReturn(order)}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                        مرجوع کردن سفارش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenReturnToSales(order)}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                        برگشت سفارش به فروش
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={onClose}
@@ -848,25 +939,31 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                 <span className="text-xs font-semibold text-emerald-800">
                   {financeRejected
                     ? 'لوکیشن و مدارک اصلاحی کامل هستند و آماده ارسال مجدد به واحد صدور فاکتور می‌باشند.'
-                    : 'لوکیشن مشتری و هر دو مدرک ثبت شدند و آماده ارسال به بخش صدور فاکتور هستند.'}
+                    : isPartialReturn
+                      ? 'لوکیشن و مدارک بخش تحویل‌داده‌شده کامل هستند و آماده ارسال به صدور فاکتور می‌باشند.'
+                      : 'لوکیشن مشتری و هر دو مدرک ثبت شدند و آماده ارسال به بخش صدور فاکتور هستند.'}
                 </span>
                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenDriverReturn(order)}
-                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                    مرجوع کردن سفارش
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenReturnToSales(order)}
-                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
-                    برگشت سفارش به فروش
-                  </button>
+                  {!isPartialReturn && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDriverReturn(order)}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                        مرجوع کردن سفارش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenReturnToSales(order)}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                        برگشت سفارش به فروش
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() => onCompleteDelivery(order.id)}
@@ -875,7 +972,9 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                     <CheckCheck className="w-4 h-4" />
                     {financeRejected
                       ? 'ارسال مجدد مدارک و اتمام تحویل'
-                      : 'اتمام تحویل و ارسال به صدور فاکتور'}
+                      : isPartialReturn
+                        ? 'ثبت تحویل بخش باقی‌مانده و ارسال مدارک به فاکتور'
+                        : 'اتمام تحویل و ارسال به صدور فاکتور'}
                   </button>
                 </div>
               </>
@@ -885,8 +984,9 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                   <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-900">
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                     <span>
-                      موارد الزامی باقی‌مانده برای نهایی کردن سفارش (
-                      {toPersianDigits(missingRequirements.length)} مورد):
+                      {isPartialReturn
+                        ? `موارد الزامی باقی‌مانده برای نهایی کردن بخش تحویل‌داده‌شده (${toPersianDigits(missingRequirements.length)} مورد):`
+                        : `موارد الزامی باقی‌مانده برای نهایی کردن سفارش (${toPersianDigits(missingRequirements.length)} مورد):`}
                     </span>
                   </div>
                   <ul className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs font-semibold text-slate-700 pr-4 list-disc">
@@ -896,22 +996,26 @@ export const DriverOrderModal: React.FC<DriverOrderModalProps> = ({
                   </ul>
                 </div>
                 <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onOpenDriverReturn(order)}
-                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                    مرجوع کردن سفارش
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenReturnToSales(order)}
-                    className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
-                  >
-                    <Undo2 className="w-3.5 h-3.5 shrink-0" />
-                    برگشت سفارش به فروش
-                  </button>
+                  {!isPartialReturn && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDriverReturn(order)}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                        مرجوع کردن سفارش
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpenReturnToSales(order)}
+                        className="w-full sm:w-auto min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white transition-colors whitespace-nowrap"
+                      >
+                        <Undo2 className="w-3.5 h-3.5 shrink-0" />
+                        برگشت سفارش به فروش
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={onClose}

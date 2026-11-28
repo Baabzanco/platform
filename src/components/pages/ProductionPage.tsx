@@ -38,12 +38,25 @@ type ProdFilter =
   | 'returned'
   | 'rejected';
 
+function isAwaitingShippingReturn(order: Order): boolean {
+  return (
+    order.status === 'returned' &&
+    order.returnRecord?.stage === 'awaiting_shipping_receive' &&
+    !(order.returnRecord?.confirmations.shipping.confirmed ?? false)
+  );
+}
+
+function isReturnVisibleToProd(order: Order): boolean {
+  return order.status === 'returned' && !isAwaitingShippingReturn(order);
+}
+
 function isCompletedInProd(order: Order): boolean {
   return (
     order.status === 'pending_finance_approval' ||
     order.status === 'finance_discrepancy_review' ||
     order.status === 'pending_shipping' ||
-    order.status === 'delivered'
+    order.status === 'delivered' ||
+    isAwaitingShippingReturn(order)
   );
 }
 
@@ -57,8 +70,7 @@ function isReadyForFinalApprovalInProd(order: Order): boolean {
 
 function isPendingReturnConfirmInProd(order: Order): boolean {
   return (
-    order.status === 'returned' &&
-    order.returnRecord?.stage !== 'awaiting_shipping_receive' &&
+    isReturnVisibleToProd(order) &&
     !(order.returnRecord?.confirmations.production.confirmed ?? false)
   );
 }
@@ -73,7 +85,7 @@ function getProductionSortRank(order: Order): number {
   if (order.status === 'in_production') return 2;
   if (isCompletedInProd(order)) return 3;
   if (order.status === 'returned_to_sales') return 4;
-  if (order.status === 'returned') return 5;
+  if (isReturnVisibleToProd(order)) return 5;
   return 6;
 }
 
@@ -103,7 +115,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
         (statusFilter === 'completed' && isCompletedInProd(order)) ||
         (statusFilter === 'returned_to_sales' &&
           order.status === 'returned_to_sales') ||
-        (statusFilter === 'returned' && order.status === 'returned') ||
+        (statusFilter === 'returned' && isReturnVisibleToProd(order)) ||
         (statusFilter === 'rejected' && order.status === 'rejected');
 
       if (!matchesFilter) return false;
@@ -336,7 +348,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
               const readyForFinalApproval = isReadyForFinalApprovalInProd(order);
               const returnedToSales = order.status === 'returned_to_sales';
               const rejected = order.status === 'rejected';
-              const returned = order.status === 'returned';
+              const returned = isReturnVisibleToProd(order);
               const pendingReturnConfirm = isPendingReturnConfirmInProd(order);
 
               const showOtherDivider =

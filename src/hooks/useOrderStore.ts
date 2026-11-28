@@ -689,6 +689,15 @@ export function useOrderStore() {
             return { ...item, returnedWeight: retVal };
           });
 
+          const isFullOrder = updatedItems.every((it) => {
+            const delivered =
+              it.deliveredWeight ??
+              it.revisedWeight ??
+              it.producedWeight ??
+              it.requestedWeight;
+            return it.returnedWeight >= delivered - 0.001;
+          });
+
           return {
             ...order,
             status: 'returned',
@@ -697,7 +706,7 @@ export function useOrderStore() {
             returnRecord: {
               initiatedBy: 'shipping',
               driverName: order.driverName || undefined,
-              scope: 'partial',
+              scope: isFullOrder ? 'full_order' : 'partial',
               stage: 'awaiting_prod_and_finance',
               items: returnedItemsList,
               notes,
@@ -780,11 +789,30 @@ export function useOrderStore() {
         })
       );
 
-      const scopeLabel = scope === 'full_order' ? 'مرجوعی کل سفارش' : 'مرجوعی جزئی سفارش';
+      const remainingDeliveredKg = Number(
+        target.items
+          .reduce((sum, item) => {
+            const shipped =
+              item.deliveredWeight ??
+              item.revisedWeight ??
+              item.producedWeight ??
+              item.requestedWeight;
+            const retVal = Number((returnedWeights[item.id] ?? 0).toFixed(2));
+            return sum + Math.max(0, shipped - retVal);
+          }, 0)
+          .toFixed(2)
+      );
+
+      const scopeLabel =
+        scope === 'full_order' ? 'مرجوعی کل سفارش' : 'مرجوعی جزئی سفارش';
       const title = `${scopeLabel} — سفارش ${target.code}`;
-      const message = `راننده (${target.driverName || 'راننده'}) مرجوعی سفارش ${target.code} به وزن ${formatWeight(totalReturnedKg)} را ثبت کرد. سفارش جهت تحویل گرفتن مجدد بار و ثبت وزن دقیق به بخش ارسال ارجاع شد.`;
-      pushToast(title, message, 'ارسال به بخش ارسال', 'danger');
-      queueDeptNotification('shipping', title, message, 'danger');
+      const driverToastMsg =
+        remainingDeliveredKg > 0.001
+          ? `مرجوعی به وزن ${formatWeight(totalReturnedKg)} به بخش ارسال ارجاع شد. لطفاً برای اقلام تحویلی باقی‌مانده (${formatWeight(remainingDeliveredKg)}) عکس فاکتور و رسید پرداخت را نیز ثبت و ارسال کنید.`
+          : `راننده (${target.driverName || 'راننده'}) مرجوعی کل سفارش ${target.code} به وزن ${formatWeight(totalReturnedKg)} را ثبت کرد و به بخش ارسال ارجاع شد.`;
+      const shippingNotifMsg = `راننده (${target.driverName || 'راننده'}) ${scopeLabel} ${target.code} به وزن ${formatWeight(totalReturnedKg)} را ثبت کرد. سفارش جهت تحویل گرفتن مجدد بار و ثبت وزن دقیق به بخش ارسال ارجاع شد.`;
+      pushToast(title, driverToastMsg, 'ارسال به بخش ارسال', 'danger');
+      queueDeptNotification('shipping', title, shippingNotifMsg, 'danger');
     },
     [orders, pushToast, queueDeptNotification]
   );
@@ -864,11 +892,17 @@ export function useOrderStore() {
         })
       );
 
+      const hasDriverDocsReady = Boolean(
+        target.driverDelivery?.sentToFinance && !target.driverDelivery?.financeVerified
+      );
       const title = `تایید دریافت مرجوعی در ارسال — سفارش ${target.code}`;
-      const message = `بخش ارسال بار مرجوعی سفارش ${target.code} را به وزن ${formatWeight(totalVerifiedKg)} (ارزش ${formatRial(totalVerifiedRial)}) از راننده تحویل گرفت و تایید کرد. مرجوعی همزمان به تولید و صدور فاکتور ارسال شد.`;
-      pushToast(title, message, 'ارسال همزمان به تولید و صدور فاکتور', 'warning');
-      queueDeptNotification('production', title, message, 'danger');
-      queueDeptNotification('finance', title, message, 'danger');
+      const baseMessage = `بخش ارسال بار مرجوعی سفارش ${target.code} را به وزن ${formatWeight(totalVerifiedKg)} (ارزش ${formatRial(totalVerifiedRial)}) از راننده تحویل گرفت و تایید کرد. مرجوعی همزمان به تولید و صدور فاکتور ارسال شد.`;
+      const financeMessage = hasDriverDocsReady
+        ? `${baseMessage} مدارک بار تحویل‌داده‌شده (عکس فاکتور و رسید) نیز برای بررسی در بخش صدور فاکتور آماده است.`
+        : baseMessage;
+      pushToast(title, baseMessage, 'ارسال همزمان به تولید و صدور فاکتور', 'warning');
+      queueDeptNotification('production', title, baseMessage, 'danger');
+      queueDeptNotification('finance', title, financeMessage, 'danger');
     },
     [orders, pushToast, queueDeptNotification]
   );
@@ -1157,12 +1191,32 @@ export function useOrderStore() {
         })
       );
 
+      const isPartialReturn = target.status === 'returned';
+      const isAwaitingShippingReturn =
+        isPartialReturn &&
+        target.returnRecord?.stage === 'awaiting_shipping_receive' &&
+        !(target.returnRecord?.confirmations.shipping.confirmed ?? false);
+
+      if (isAwaitingShippingReturn) {
+        pushToast(
+          `مدارک بخش تحویل‌داده‌شده ثبت شد — سفارش ${target.code}`,
+          `عکس فاکتور و رسید پرداخت بخش تحویل‌داده‌شده سفارش ${target.code} ذخیره شد و پس از تحویل گرفتن و تایید بار مرجوعی توسط واحد ارسال، برای بخش صدور فاکتور ارسال خواهد شد.`,
+          'در انتظار تایید واحد ارسال',
+          'success'
+        );
+        return;
+      }
+
       const title = wasRejected
         ? `ارسال مجدد مدارک تحویل — سفارش ${target.code}`
-        : `اتمام تحویل و ارسال مدارک — سفارش ${target.code}`;
+        : isPartialReturn
+          ? `ارسال مدارک بخش تحویل‌داده‌شده — سفارش ${target.code}`
+          : `اتمام تحویل و ارسال مدارک — سفارش ${target.code}`;
       const message = wasRejected
         ? `عکس جدید مدارک سفارش ${target.code} (${target.district}) توسط راننده مجدداً ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`
-        : `عکس فاکتور و رسید پرداخت سفارش ${target.code} (${target.district}) توسط راننده ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`;
+        : isPartialReturn
+          ? `عکس فاکتور و رسید پرداخت بخش تحویل‌داده‌شده سفارش ${target.code} (باقی‌مانده پس از مرجوعی جزئی) توسط راننده ثبت و جهت تایید به بخش صدور فاکتور ارسال شد.`
+          : `عکس فاکتور و رسید پرداخت سفارش ${target.code} (${target.district}) توسط راننده ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`;
       pushToast(title, message, 'ارسال به بخش صدور فاکتور', 'success');
       queueDeptNotification('finance', title, message, 'success');
     },
@@ -1193,9 +1247,14 @@ export function useOrderStore() {
         })
       );
 
+      const isPartialReturn = target.status === 'returned';
       pushToast(
-        `مدارک تحویل تایید شد — سفارش ${target.code}`,
-        `عکس فاکتور و رسید پرداخت ارسال‌شده توسط راننده برای سفارش ${target.code} در بخش صدور فاکتور تایید نهایی شد.`,
+        isPartialReturn
+          ? `مدارک بخش تحویل‌داده‌شده تایید شد — سفارش ${target.code}`
+          : `مدارک تحویل تایید شد — سفارش ${target.code}`,
+        isPartialReturn
+          ? `عکس فاکتور و رسید پرداخت مربوط به اقلام تحویل‌داده‌شده سفارش ${target.code} (باقی‌مانده پس از مرجوعی جزئی) در بخش صدور فاکتور تایید نهایی شد.`
+          : `عکس فاکتور و رسید پرداخت ارسال‌شده توسط راننده برای سفارش ${target.code} در بخش صدور فاکتور تایید نهایی شد.`,
         'بخش صدور فاکتور',
         'success'
       );

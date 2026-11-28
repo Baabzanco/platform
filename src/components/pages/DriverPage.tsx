@@ -52,17 +52,41 @@ function getDocCount(order: Order): number {
   return count;
 }
 
-function isDriverDocsRejected(order: Order): boolean {
-  return Boolean(
-    order.status === 'delivered' &&
-      order.driverDelivery?.financeRejected &&
-      !order.driverDelivery?.sentToFinance
+function getNetDeliveredWeight(order: Order): number {
+  return Number(
+    order.items
+      .reduce(
+        (sum, item) =>
+          sum + Math.max(0, getShippingWeight(item) - (item.returnedWeight ?? 0)),
+        0
+      )
+      .toFixed(2)
   );
 }
 
-function isDriverInitiatedReturn(order: Order): boolean {
+function isPartialReturnOrder(order: Order): boolean {
   return (
-    order.status === 'returned' && order.returnRecord?.initiatedBy === 'driver'
+    order.status === 'returned' &&
+    Boolean(order.returnRecord) &&
+    getNetDeliveredWeight(order) > 0.001
+  );
+}
+
+function isDriverVisibleReturn(order: Order): boolean {
+  return (
+    order.status === 'returned' &&
+    Boolean(order.returnRecord) &&
+    (order.returnRecord?.initiatedBy === 'driver' || isPartialReturnOrder(order))
+  );
+}
+
+function isDriverDocsRejected(order: Order): boolean {
+  const canHaveDocs =
+    order.status === 'delivered' || isPartialReturnOrder(order);
+  return Boolean(
+    canHaveDocs &&
+      order.driverDelivery?.financeRejected &&
+      !order.driverDelivery?.sentToFinance
   );
 }
 
@@ -80,13 +104,13 @@ export const DriverPage: React.FC<DriverPageProps> = ({
   const [filter, setFilter] = useState<DriverFilter>('all');
   const [driverFilter, setDriverFilter] = useState<string>('all');
 
-  // Show orders approved and handed off by Shipping (واحد ارسال) + driver-initiated returns,
+  // Show orders approved and handed off by Shipping (واحد ارسال) + driver-visible returns,
   // sorted by Delivery Time Slot (بازه زمانی ارسال), with Finance-rejected photos pinned at top.
   const slotSortedDayOrders = useMemo(() => {
     return orders
       .filter(
         (order) =>
-          order.status === 'delivered' || isDriverInitiatedReturn(order)
+          order.status === 'delivered' || isDriverVisibleReturn(order)
       )
       .slice()
       .sort((a, b) => {
@@ -95,9 +119,11 @@ export const DriverPage: React.FC<DriverPageProps> = ({
         if (aRej !== bRej) return aRej - bRej;
         if (aRej === 0 && bRej === 0) return b.lastActionAt - a.lastActionAt;
 
-        const aRet = isDriverInitiatedReturn(a) ? 1 : 0;
-        const bRet = isDriverInitiatedReturn(b) ? 1 : 0;
-        if (aRet !== bRet) return aRet - bRet;
+        const aFullRet =
+          isDriverVisibleReturn(a) && !isPartialReturnOrder(a) ? 1 : 0;
+        const bFullRet =
+          isDriverVisibleReturn(b) && !isPartialReturnOrder(b) ? 1 : 0;
+        if (aFullRet !== bFullRet) return aFullRet - bFullRet;
 
         const slotDiff =
           getDeliverySlotSortKey(a.deliverySlot) -
@@ -115,37 +141,40 @@ export const DriverPage: React.FC<DriverPageProps> = ({
 
   const missingLocationCount = useMemo(
     () =>
-      slotSortedDayOrders.filter(
-        (o) => !isDriverInitiatedReturn(o) && !o.customerLocation
-      ).length,
+      slotSortedDayOrders.filter((o) => {
+        const isFullRet = isDriverVisibleReturn(o) && !isPartialReturnOrder(o);
+        return !isFullRet && !o.customerLocation;
+      }).length,
     [slotSortedDayOrders]
   );
 
   const completedCount = useMemo(
     () =>
-      slotSortedDayOrders.filter(
-        (o) => !isDriverInitiatedReturn(o) && o.driverDelivery?.sentToFinance
-      ).length,
+      slotSortedDayOrders.filter((o) => {
+        const isFullRet = isDriverVisibleReturn(o) && !isPartialReturnOrder(o);
+        return !isFullRet && o.driverDelivery?.sentToFinance;
+      }).length,
     [slotSortedDayOrders]
   );
 
   const returnedCount = useMemo(
-    () => slotSortedDayOrders.filter(isDriverInitiatedReturn).length,
+    () => slotSortedDayOrders.filter(isDriverVisibleReturn).length,
     [slotSortedDayOrders]
   );
 
   const filteredOrders = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return slotSortedDayOrders.filter((order) => {
-      const isReturned = isDriverInitiatedReturn(order);
-      const completed = !isReturned && Boolean(order.driverDelivery?.sentToFinance);
+      const isReturned = isDriverVisibleReturn(order);
+      const isFullRet = isReturned && !isPartialReturnOrder(order);
+      const completed = !isFullRet && Boolean(order.driverDelivery?.sentToFinance);
       const rejectedDocs = isDriverDocsRejected(order);
 
       const matchesFilter =
         filter === 'all' ||
         (filter === 'rejected_docs' && rejectedDocs) ||
-        (filter === 'pending' && !isReturned && !completed) ||
-        (filter === 'no_location' && !isReturned && !order.customerLocation) ||
+        (filter === 'pending' && !isFullRet && !completed) ||
+        (filter === 'no_location' && !isFullRet && !order.customerLocation) ||
         (filter === 'completed' && completed) ||
         (filter === 'returned' && isReturned);
 
@@ -350,16 +379,20 @@ export const DriverPage: React.FC<DriverPageProps> = ({
           </div>
         ) : (
           filteredOrders.map((order, idx) => {
-            const isReturned = isDriverInitiatedReturn(order);
+            const isReturned = isDriverVisibleReturn(order);
+            const isPartialReturn = isPartialReturnOrder(order);
+            const isFullReturn = isReturned && !isPartialReturn;
+            const needsDeliveryDocs = !isFullReturn;
             const returnRecord = order.returnRecord;
             const returnTotalKg = Number(
               (returnRecord?.items ?? [])
                 .reduce((sum, it) => sum + (it.shippingWeight ?? it.weight), 0)
                 .toFixed(2)
             );
+            const netDeliveredKg = getNetDeliveredWeight(order);
             const docCount = getDocCount(order);
             const completed =
-              !isReturned && Boolean(order.driverDelivery?.sentToFinance);
+              needsDeliveryDocs && Boolean(order.driverDelivery?.sentToFinance);
             const financeVerified = Boolean(order.driverDelivery?.financeVerified);
             const rejectedDocs = isDriverDocsRejected(order);
             const hasLocation = Boolean(order.customerLocation);
@@ -369,10 +402,10 @@ export const DriverPage: React.FC<DriverPageProps> = ({
               rejectedDocsCount > 0 &&
               idx === rejectedDocsCount;
 
-            const cardBorderClass = isReturned
-              ? 'border-2 border-red-400 bg-red-50/25'
-              : rejectedDocs
-                ? 'border-2 border-red-500 bg-red-50/35 shadow-md ring-2 ring-red-500/20'
+            const cardBorderClass = rejectedDocs
+              ? 'border-2 border-red-500 bg-red-50/35 shadow-md ring-2 ring-red-500/20'
+              : isReturned
+                ? 'border-2 border-red-400 bg-red-50/20'
                 : completed
                   ? 'border border-emerald-400 bg-emerald-50/20'
                   : docCount === 2
@@ -395,26 +428,35 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                     printingOrderId === order.id ? 'print-target' : ''
                   } rounded-2xl sm:rounded-xl overflow-hidden transition-all ${cardBorderClass}`}
                 >
-                  {/* RED BANNER when Driver-initiated Return */}
+                  {/* RED BANNER when Returned (Full or Partial) */}
                   {isReturned && returnRecord && (
                     <div className="no-print px-4 py-2.5 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                       <span className="inline-flex items-center gap-1.5">
                         <RotateCcw className="w-4 h-4 shrink-0" />
-                        {returnRecord.stage === 'awaiting_shipping_receive'
-                          ? 'مرجوعی ثبت‌شده — در انتظار تحویل بار و ثبت وزن در بخش ارسال'
-                          : returnRecord.stage === 'completed'
-                            ? 'مرجوعی تایید نهایی شد (ارسال، تولید و صدور فاکتور)'
-                            : 'بار تحویل بخش ارسال شد — در انتظار تایید تولید و صدور فاکتور'}
+                        {isPartialReturn
+                          ? returnRecord.stage === 'awaiting_shipping_receive'
+                            ? 'مرجوعی جزئی (در انتظار ارسال) — تحویل باقی‌مانده و ارسال عکس فاکتور و رسید الزامی است'
+                            : returnRecord.stage === 'completed'
+                              ? 'مرجوعی جزئی تایید نهایی شد'
+                              : 'مرجوعی جزئی تحویل ارسال شد — در انتظار تایید تولید و صدور فاکتور'
+                          : returnRecord.stage === 'awaiting_shipping_receive'
+                            ? 'مرجوعی کل سفارش — در انتظار تحویل بار و ثبت وزن در بخش ارسال'
+                            : returnRecord.stage === 'completed'
+                              ? 'مرجوعی کل سفارش تایید نهایی شد (ارسال، تولید و صدور فاکتور)'
+                              : 'بار مرجوعی تحویل بخش ارسال شد — در انتظار تایید تولید و صدور فاکتور'}
                       </span>
                       <span className="tabular-nums text-[11px] opacity-95">
-                        حجم مرجوعی: {formatWeight(returnTotalKg)}
+                        مرجوعی: {formatWeight(returnTotalKg)}
+                        {isPartialReturn
+                          ? ` · تحویلی: ${formatWeight(netDeliveredKg)}`
+                          : ''}
                       </span>
                     </div>
                   )}
 
                   {/* RED TOP PRIORITY BANNER when Finance Rejected Driver Photos */}
-                  {!isReturned && rejectedDocs && (
-                    <div className="no-print px-4 py-2.5 bg-red-600 text-white space-y-1">
+                  {needsDeliveryDocs && rejectedDocs && (
+                    <div className="no-print px-4 py-2.5 bg-red-700 text-white space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
                           <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -427,7 +469,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                         )}
                       </div>
                       {order.driverDelivery?.financeRejectionReason && (
-                        <div className="text-[11px] sm:text-xs text-red-50 leading-relaxed bg-red-700/55 rounded-lg px-2.5 py-1.5">
+                        <div className="text-[11px] sm:text-xs text-red-50 leading-relaxed bg-red-800/55 rounded-lg px-2.5 py-1.5">
                           <strong>دلیل رد صدور فاکتور:</strong>{' '}
                           {order.driverDelivery.financeRejectionReason}
                         </div>
@@ -436,13 +478,17 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                   )}
 
                   {/* Emerald Banner when Completed */}
-                  {!isReturned && completed && (
+                  {needsDeliveryDocs && completed && (
                     <div className="no-print px-4 py-2 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                       <span className="inline-flex items-center gap-1.5">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
                         {financeVerified
-                          ? 'تحویل تکمیل شد · تایید نهایی صدور فاکتور'
-                          : 'اتمام تحویل ثبت شد · ارسال‌شده به صدور فاکتور'}
+                          ? isPartialReturn
+                            ? 'مدارک بخش تحویل‌داده‌شده تایید نهایی صدور فاکتور شد'
+                            : 'تحویل تکمیل شد · تایید نهایی صدور فاکتور'
+                          : isPartialReturn
+                            ? 'مدارک بخش تحویل‌داده‌شده ارسال شد به صدور فاکتور'
+                            : 'اتمام تحویل ثبت شد · ارسال‌شده به صدور فاکتور'}
                       </span>
                       <span className="tabular-nums text-[11px] opacity-95">
                         {order.driverDelivery?.completedAt}
@@ -451,7 +497,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                   )}
 
                   {/* Teal Banner when Ready to Complete */}
-                  {!isReturned && !completed && !rejectedDocs && docCount === 2 && (
+                  {needsDeliveryDocs && !completed && !rejectedDocs && docCount === 2 && (
                     <div className="no-print px-4 py-2 bg-[#0f5864] text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                       <span className="inline-flex items-center gap-1.5">
                         <Camera className="w-4 h-4 shrink-0" />
@@ -516,11 +562,15 @@ export const DriverPage: React.FC<DriverPageProps> = ({
 
                         <div className="col-span-2 md:col-span-1">
                           <span className="block text-[11px] text-slate-500 mb-0.5">
-                            {isReturned ? 'وضعیت مرجوعی' : 'مدارک تحویل'}
+                            {isFullReturn
+                              ? 'وضعیت مرجوعی'
+                              : isPartialReturn
+                                ? 'مدارک بخش تحویلی'
+                                : 'مدارک تحویل'}
                           </span>
                           <span
                             className={`tabular-nums font-bold text-xs ${
-                              isReturned || rejectedDocs
+                              isFullReturn || rejectedDocs
                                 ? 'text-red-700'
                                 : completed
                                   ? 'text-emerald-700'
@@ -531,10 +581,8 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                                       : 'text-slate-500'
                             }`}
                           >
-                            {isReturned
-                              ? returnRecord?.scope === 'full_order'
-                                ? 'مرجوعی کل سفارش'
-                                : 'مرجوعی بخشی از سفارش'
+                            {isFullReturn
+                              ? 'مرجوعی کل سفارش'
                               : rejectedDocs
                                 ? 'رد شده · عکاسی مجدد'
                                 : completed
@@ -598,7 +646,7 @@ export const DriverPage: React.FC<DriverPageProps> = ({
 
                   {/* Action Footer: Location/Navigation + Call + Photos + Return */}
                   <div className="no-print px-4 sm:px-5 pb-3.5 pt-1 grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2">
-                    {isReturned ? (
+                    {isFullReturn ? (
                       <button
                         type="button"
                         onClick={() => onSelectOrder(order.id)}
@@ -660,28 +708,34 @@ export const DriverPage: React.FC<DriverPageProps> = ({
                             ? 'ثبت عکس مجدد'
                             : completed
                               ? 'مشاهده مدارک'
-                              : 'عکس فاکتور و رسید'}
+                              : isPartialReturn
+                                ? 'عکس فاکتور و رسید (بخش تحویلی)'
+                                : 'عکس فاکتور و رسید'}
                         </button>
 
-                        {/* Driver Return Order */}
-                        <button
-                          type="button"
-                          onClick={() => onOpenDriverReturn(order)}
-                          className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
-                        >
-                          <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-                          مرجوع کردن سفارش
-                        </button>
+                        {!isPartialReturn && (
+                          <>
+                            {/* Driver Return Order */}
+                            <button
+                              type="button"
+                              onClick={() => onOpenDriverReturn(order)}
+                              className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-400 hover:bg-red-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
+                            >
+                              <RotateCcw className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                              مرجوع کردن سفارش
+                            </button>
 
-                        {/* Return Order to Sales */}
-                        <button
-                          type="button"
-                          onClick={() => onOpenReturnToSales(order)}
-                          className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
-                        >
-                          <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
-                          برگشت به فروش
-                        </button>
+                            {/* Return Order to Sales */}
+                            <button
+                              type="button"
+                              onClick={() => onOpenReturnToSales(order)}
+                              className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold bg-amber-50 text-amber-800 border border-amber-400 hover:bg-amber-600 hover:text-white active:scale-[0.98] transition-all whitespace-nowrap"
+                            >
+                              <Undo2 className="w-4 h-4 sm:w-3.5 sm:h-3.5 shrink-0" />
+                              برگشت به فروش
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </div>

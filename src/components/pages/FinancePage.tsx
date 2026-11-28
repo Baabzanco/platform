@@ -22,6 +22,7 @@ import {
   formatRial,
   formatWeight,
   getFinanceWeight,
+  getShippingWeight,
 } from '../../utils/formatters';
 import { CreditStandingTag } from '../CreditStandingTag';
 
@@ -44,8 +45,24 @@ type FinanceFilter =
   | 'returned'
   | 'rejected';
 
+function isAwaitingShippingReturn(order: Order): boolean {
+  return (
+    order.status === 'returned' &&
+    order.returnRecord?.stage === 'awaiting_shipping_receive' &&
+    !(order.returnRecord?.confirmations.shipping.confirmed ?? false)
+  );
+}
+
+function isReturnVisibleToFinance(order: Order): boolean {
+  return order.status === 'returned' && !isAwaitingShippingReturn(order);
+}
+
 function isFinanceApproved(order: Order): boolean {
-  return order.status === 'pending_shipping' || order.status === 'delivered';
+  return (
+    order.status === 'pending_shipping' ||
+    order.status === 'delivered' ||
+    isAwaitingShippingReturn(order)
+  );
 }
 
 function isWaitingProd(order: Order): boolean {
@@ -54,19 +71,32 @@ function isWaitingProd(order: Order): boolean {
 
 function isPendingReturnConfirmInFinance(order: Order): boolean {
   return (
-    order.status === 'returned' &&
-    order.returnRecord?.stage !== 'awaiting_shipping_receive' &&
+    isReturnVisibleToFinance(order) &&
     !(order.returnRecord?.confirmations.finance.confirmed ?? false)
   );
 }
 
+function getNetDeliveredWeightInFinance(order: Order): number {
+  return Number(
+    order.items
+      .reduce(
+        (sum, item) =>
+          sum + Math.max(0, getShippingWeight(item) - (item.returnedWeight ?? 0)),
+        0
+      )
+      .toFixed(2)
+  );
+}
+
 function hasPendingDriverDocs(order: Order): boolean {
+  if (isAwaitingShippingReturn(order)) return false;
   return Boolean(
     order.driverDelivery?.sentToFinance && !order.driverDelivery?.financeVerified
   );
 }
 
 function hasRejectedDriverDocsAwaitingRetake(order: Order): boolean {
+  if (isAwaitingShippingReturn(order)) return false;
   return Boolean(
     order.driverDelivery?.financeRejected && !order.driverDelivery?.sentToFinance
   );
@@ -90,7 +120,7 @@ function getFinanceSortRank(order: Order): number {
   if (isWaitingProd(order)) return 5;
   if (order.status === 'pending_management_approval') return 6;
   if (isFinanceApproved(order)) return 7;
-  if (order.status === 'returned') return 8;
+  if (isReturnVisibleToFinance(order)) return 8;
   return 9;
 }
 
@@ -110,6 +140,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
       const matchesFilter =
         filter === 'all' ||
         (filter === 'driver_docs' &&
+          !isAwaitingShippingReturn(order) &&
           Boolean(
             order.driverDelivery?.sentToFinance ||
               order.driverDelivery?.financeRejected
@@ -119,7 +150,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
         (filter === 'discrepancy' &&
           order.status === 'finance_discrepancy_review') ||
         (filter === 'approved' && isFinanceApproved(order)) ||
-        (filter === 'returned' && order.status === 'returned') ||
+        (filter === 'returned' && isReturnVisibleToFinance(order)) ||
         (filter === 'rejected' && order.status === 'rejected');
 
       if (!matchesFilter) return false;
@@ -169,11 +200,70 @@ export const FinancePage: React.FC<FinancePageProps> = ({
       const src = order.rejection ? DEPARTMENT_LABELS[order.rejection.source] : '';
       return { text: `رد شده (${src})`, className: 'text-red-700' };
     }
-    if (order.status === 'returned') {
-      const confirmed = order.returnRecord?.confirmations.finance.confirmed;
-      return confirmed
-        ? { text: 'مرجوعی تایید شده', className: 'text-emerald-700' }
+    if (isReturnVisibleToFinance(order)) {
+      const returnConfirmed = Boolean(order.returnRecord?.confirmations.finance.confirmed);
+      const netDeliveredKg = getNetDeliveredWeightInFinance(order);
+      const isPartialReturn = Boolean(order.returnRecord) && netDeliveredKg > 0.001;
+
+      if (isPartialReturn) {
+        const docsVerified = Boolean(order.driverDelivery?.financeVerified);
+        const docsPending = hasPendingDriverDocs(order);
+        const docsRejected = hasRejectedDriverDocsAwaitingRetake(order);
+
+        if (returnConfirmed && docsVerified) {
+          return {
+            text: 'مرجوعی و بار تحویل‌داده‌شده هر دو تایید شدند',
+            className: 'text-emerald-700',
+          };
+        }
+        if (!returnConfirmed && docsPending) {
+          return {
+            text: 'مرجوعی و مدارک بار تحویلی — هر دو نیازمند تایید',
+            className: 'text-red-700',
+          };
+        }
+        if (!returnConfirmed && docsVerified) {
+          return {
+            text: 'بار تحویلی تایید شد · مرجوعی نیازمند تایید فاکتور',
+            className: 'text-red-700',
+          };
+        }
+        if (!returnConfirmed && docsRejected) {
+          return {
+            text: 'مرجوعی نیازمند تایید · مدارک بار تحویلی رد شده',
+            className: 'text-red-700',
+          };
+        }
+        if (!returnConfirmed) {
+          return {
+            text: 'مرجوعی نیازمند تایید · در انتظار مدارک بار تحویلی',
+            className: 'text-red-700',
+          };
+        }
+        if (docsPending) {
+          return {
+            text: 'مرجوعی تایید شد · مدارک بار تحویلی آماده بررسی',
+            className: 'text-emerald-700',
+          };
+        }
+        if (docsRejected) {
+          return {
+            text: 'مرجوعی تایید شد · مدارک بار تحویلی رد شد (عکس مجدد)',
+            className: 'text-red-700',
+          };
+        }
+        return {
+          text: 'مرجوعی تایید شد · در انتظار مدارک بار تحویلی راننده',
+          className: 'text-amber-700',
+        };
+      }
+
+      return returnConfirmed
+        ? { text: 'مرجوعی کل تایید شده', className: 'text-emerald-700' }
         : { text: 'مرجوع شده — نیازمند تایید فاکتور', className: 'text-red-700' };
+    }
+    if (isAwaitingShippingReturn(order)) {
+      return { text: 'فاکتور صادر و تایید شد', className: 'text-emerald-700' };
     }
     if (hasRejectedDriverDocsAwaitingRetake(order)) {
       return {
@@ -291,7 +381,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
         ) : (
           sortedAndFilteredOrders.map((order, index) => {
             const rejected = order.status === 'rejected';
-            const returned = order.status === 'returned';
+            const returned = isReturnVisibleToFinance(order);
             const pendingReturnConfirm = isPendingReturnConfirmInFinance(order);
             const pendingDriverDocs = hasPendingDriverDocs(order);
             const rejectedDriverDocs = hasRejectedDriverDocsAwaitingRetake(order);
@@ -305,6 +395,13 @@ export const FinancePage: React.FC<FinancePageProps> = ({
               0
             );
             const netAfterReturn = Math.max(0, orderTotal - returnDeduction);
+            const netDeliveredKg = getNetDeliveredWeightInFinance(order);
+            const isPartialReturn =
+              returned && Boolean(order.returnRecord) && netDeliveredKg > 0.001;
+            const awaitingPartialDriverDocs =
+              isPartialReturn &&
+              !order.driverDelivery?.sentToFinance &&
+              !rejectedDriverDocs;
 
             const showOtherDivider =
               priorityCount > 0 && index === priorityCount;
@@ -363,32 +460,57 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                       <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
                           <RotateCcw className="w-3.5 h-3.5 shrink-0" />
-                          سفارش مرجوعی نیازمند تایید در صدور فاکتور
+                          {isPartialReturn
+                            ? 'مرجوعی جزئی نیازمند تایید در صدور فاکتور'
+                            : 'سفارش مرجوعی نیازمند تایید در صدور فاکتور'}
                         </span>
                         <span className="tabular-nums opacity-95 text-[11px]">
-                          کسر: {formatRial(returnDeduction)}
+                          کسر مرجوعی: {formatRial(returnDeduction)}
+                          {isPartialReturn
+                            ? ` · تحویل به مشتری: ${formatWeight(netDeliveredKg)}`
+                            : ''}
                         </span>
                       </div>
                     )}
 
-                    {pendingDriverDocs && !pendingReturnConfirm && (
+                    {pendingDriverDocs && (
                       <div className="no-print px-4 sm:px-5 py-2 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
                           <Camera className="w-3.5 h-3.5 shrink-0" />
-                          مدارک تحویل راننده دریافت شد — آماده بررسی (تایید یا رد)
+                          {isPartialReturn
+                            ? 'مدارک بار تحویل‌داده‌شده (باقی‌مانده پس از مرجوعی جزئی) دریافت شد — آماده تایید یا رد'
+                            : 'مدارک تحویل راننده دریافت شد — آماده بررسی (تایید یا رد)'}
                         </span>
-                        <span className="opacity-95 text-[11px]">مشاهده عکس‌ها</span>
+                        <span className="tabular-nums opacity-95 text-[11px]">
+                          {isPartialReturn
+                            ? `خالص: ${formatRial(netAfterReturn)} · مشاهده عکس‌ها`
+                            : 'مشاهده عکس‌ها'}
+                        </span>
                       </div>
                     )}
 
-                    {rejectedDriverDocs && !pendingReturnConfirm && (
+                    {rejectedDriverDocs && (
                       <div className="no-print px-4 sm:px-5 py-2 bg-red-100 text-red-900 border-b border-red-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
                           <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                          مدارک تحویل رد شد — در انتظار عکاسی مجدد راننده
+                          {isPartialReturn
+                            ? 'مدارک بار تحویل‌داده‌شده رد شد — در انتظار عکاسی مجدد راننده'
+                            : 'مدارک تحویل رد شد — در انتظار عکاسی مجدد راننده'}
                         </span>
                         <span className="text-[11px] text-red-700 font-medium truncate max-w-[260px]">
                           {order.driverDelivery?.financeRejectionReason}
+                        </span>
+                      </div>
+                    )}
+
+                    {awaitingPartialDriverDocs && (
+                      <div className="no-print px-4 sm:px-5 py-1.5 bg-amber-50 text-amber-900 border-b border-amber-200 flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Camera className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          در انتظار ارسال عکس فاکتور و رسید بخش تحویل‌داده‌شده توسط راننده
+                        </span>
+                        <span className="tabular-nums text-amber-800">
+                          تحویلی خالص: {formatWeight(netDeliveredKg)} · {formatRial(netAfterReturn)}
                         </span>
                       </div>
                     )}

@@ -231,15 +231,25 @@ export default function App() {
     const deptForSeen: WorkflowDepartment = activeWorkflowDept ?? 'production';
 
     for (const order of orders) {
-      if (
-        activePage === 'driver' &&
-        order.status !== 'delivered' &&
-        !(
+      if (activePage === 'driver') {
+        const isPartialRet =
           order.status === 'returned' &&
-          order.returnRecord?.initiatedBy === 'driver'
-        )
-      ) {
-        continue;
+          Boolean(order.returnRecord) &&
+          order.items.some(
+            (it) =>
+              (it.deliveredWeight ??
+                it.revisedWeight ??
+                it.producedWeight ??
+                it.requestedWeight) -
+                it.returnedWeight >
+              0.001
+          );
+        const isDriverRet =
+          order.status === 'returned' &&
+          order.returnRecord?.initiatedBy === 'driver';
+        if (order.status !== 'delivered' && !isDriverRet && !isPartialRet) {
+          continue;
+        }
       }
       if (
         activePage === 'production' &&
@@ -283,12 +293,25 @@ export default function App() {
   // Count of orders with Finance-rejected driver photos (for red Driver nav badge)
   const rejectedDriverDocsCount = useMemo(
     () =>
-      orders.filter(
-        (order) =>
-          order.status === 'delivered' &&
+      orders.filter((order) => {
+        const isPartialRet =
+          order.status === 'returned' &&
+          Boolean(order.returnRecord) &&
+          order.items.some(
+            (it) =>
+              (it.deliveredWeight ??
+                it.revisedWeight ??
+                it.producedWeight ??
+                it.requestedWeight) -
+                it.returnedWeight >
+              0.001
+          );
+        return (
+          (order.status === 'delivered' || isPartialRet) &&
           order.driverDelivery?.financeRejected &&
           !order.driverDelivery?.sentToFinance
-      ).length,
+        );
+      }).length,
     [orders]
   );
 
@@ -762,7 +785,17 @@ export default function App() {
             selectedOrder &&
             (selectedOrder.status === 'delivered' ||
               (selectedOrder.status === 'returned' &&
-                selectedOrder.returnRecord?.initiatedBy === 'driver'))
+                Boolean(selectedOrder.returnRecord) &&
+                (selectedOrder.returnRecord?.initiatedBy === 'driver' ||
+                  selectedOrder.items.some(
+                    (it) =>
+                      (it.deliveredWeight ??
+                        it.revisedWeight ??
+                        it.producedWeight ??
+                        it.requestedWeight) -
+                        it.returnedWeight >
+                      0.001
+                  ))))
               ? selectedOrder
               : null
           }

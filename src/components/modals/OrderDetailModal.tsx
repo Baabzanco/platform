@@ -138,12 +138,23 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   const returnedToSales = order.status === 'returned_to_sales';
   const pendingManagement = order.status === 'pending_management_approval';
   const rejected = order.status === 'rejected';
-  const returned = order.status === 'returned';
+  const awaitingShippingReceive =
+    order.status === 'returned' &&
+    order.returnRecord?.stage === 'awaiting_shipping_receive' &&
+    !(order.returnRecord?.confirmations.shipping.confirmed ?? false);
+
+  // Until Shipping receives & confirms a driver-initiated return, Production and Finance
+  // must NOT see the return (they continue seeing the order in its dispatched/completed state).
+  const hideReturnForCurrentDept =
+    awaitingShippingReceive &&
+    (department === 'production' || department === 'finance');
+
+  const returned = order.status === 'returned' && !hideReturnForCurrentDept;
   const inProduction = order.status === 'in_production';
   const discrepancy = order.status === 'finance_discrepancy_review';
   const readyForFinance = order.status === 'pending_finance_approval';
   const readyToShip = order.status === 'pending_shipping';
-  const delivered = order.status === 'delivered';
+  const delivered = order.status === 'delivered' || hideReturnForCurrentDept;
 
   const prodCompleted =
     readyForFinance || discrepancy || readyToShip || delivered;
@@ -159,16 +170,27 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
     0
   );
   const netAfterReturn = Math.max(0, orderTotal - returnDeduction);
+  const netDeliveredTotalKg = Number(
+    order.items
+      .reduce(
+        (sum, item) =>
+          sum + Math.max(0, getShippingWeight(item) - (item.returnedWeight ?? 0)),
+        0
+      )
+      .toFixed(2)
+  );
+  const totalReturnedKg = Number(
+    order.items
+      .reduce((sum, item) => sum + (item.returnedWeight ?? 0), 0)
+      .toFixed(2)
+  );
+  const isPartialReturn =
+    returned && Boolean(order.returnRecord) && netDeliveredTotalKg > 0.001;
 
   const isWorkflowDept =
     department === 'production' ||
     department === 'finance' ||
     department === 'shipping';
-
-  const awaitingShippingReceive =
-    returned &&
-    order.returnRecord?.stage === 'awaiting_shipping_receive' &&
-    !(order.returnRecord?.confirmations.shipping.confirmed ?? false);
 
   const deptReturnPending =
     isWorkflowDept &&
@@ -177,7 +199,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
     (department === 'shipping' || !awaitingShippingReceive);
 
   const driverDocsRejectedPending = Boolean(
-    order.driverDelivery?.financeRejected && !order.driverDelivery?.sentToFinance
+    !hideReturnForCurrentDept &&
+      order.driverDelivery?.financeRejected &&
+      !order.driverDelivery?.sentToFinance
   );
 
   const handleDeliveryClick = () => {
@@ -206,20 +230,87 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
       return { text: `رد شده (${src})`, className: 'text-red-700' };
     }
     if (returned) {
+      const returnConfirmed = Boolean(order.returnRecord?.confirmations.finance.confirmed);
+      if (isPartialReturn) {
+        const docsVerified = Boolean(order.driverDelivery?.financeVerified);
+        const docsPending = Boolean(
+          order.driverDelivery?.sentToFinance && !order.driverDelivery?.financeVerified
+        );
+
+        if (returnConfirmed && docsVerified) {
+          return {
+            text: 'مرجوعی و بار تحویل‌داده‌شده هر دو تایید شدند',
+            className: 'text-emerald-700',
+          };
+        }
+        if (awaitingShippingReceive) {
+          if (docsPending) {
+            return {
+              text: 'مدارک بار تحویلی آماده تایید · مرجوعی در انتظار تحویل به ارسال',
+              className: 'text-amber-700',
+            };
+          }
+          if (docsVerified) {
+            return {
+              text: 'بار تحویلی تایید شد · مرجوعی در انتظار تحویل به ارسال',
+              className: 'text-amber-700',
+            };
+          }
+          return {
+            text: 'مرجوعی جزئی — در انتظار تحویل به ارسال و مدارک راننده',
+            className: 'text-amber-700',
+          };
+        }
+        if (!returnConfirmed && docsPending) {
+          return {
+            text: 'مرجوعی و مدارک بار تحویلی — هر دو نیازمند تایید',
+            className: 'text-red-700',
+          };
+        }
+        if (!returnConfirmed && docsVerified) {
+          return {
+            text: 'بار تحویلی تایید شد · مرجوعی نیازمند تایید صدور فاکتور',
+            className: 'text-red-700',
+          };
+        }
+        if (!returnConfirmed) {
+          return {
+            text: 'مرجوعی نیازمند تایید · در انتظار مدارک بار تحویلی',
+            className: 'text-red-700',
+          };
+        }
+        if (docsPending) {
+          return {
+            text: 'مرجوعی تایید شد · مدارک بار تحویلی آماده بررسی',
+            className: 'text-emerald-700',
+          };
+        }
+        if (driverDocsRejectedPending) {
+          return {
+            text: 'مرجوعی تایید شد · مدارک بار تحویلی رد شد (عکس مجدد)',
+            className: 'text-red-700',
+          };
+        }
+        return {
+          text: 'مرجوعی تایید شد · در انتظار مدارک بار تحویلی راننده',
+          className: 'text-amber-700',
+        };
+      }
+
       if (awaitingShippingReceive) {
         return {
           text: 'مرجوعی از راننده — در انتظار تحویل بار در ارسال',
           className: 'text-amber-700',
         };
       }
-      return order.returnRecord?.confirmations.finance.confirmed
-        ? { text: 'مرجوعی تایید شده (صدور فاکتور)', className: 'text-emerald-700' }
+      return returnConfirmed
+        ? { text: 'مرجوعی کل تایید شده (صدور فاکتور)', className: 'text-emerald-700' }
         : { text: 'مرجوع شده — در انتظار تایید صدور فاکتور', className: 'text-red-700' };
     }
     if (driverDocsRejectedPending) {
       return { text: 'مدارک راننده رد شد — در انتظار عکس مجدد', className: 'text-red-700' };
     }
-    if (order.driverDelivery?.sentToFinance) {
+    if (!hideReturnForCurrentDept && order.driverDelivery?.sentToFinance) {
       return order.driverDelivery.financeVerified
         ? { text: 'مدارک تحویل راننده تایید شد', className: 'text-emerald-700' }
         : { text: 'مدارک تحویل دریافت شد (آماده بررسی)', className: 'text-emerald-700' };
@@ -617,7 +708,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                           )}
                         </div>
 
-                        {item.returnedWeight > 0 && (
+                        {returned && item.returnedWeight > 0 && (
                           <div className="tabular-nums text-xs font-bold text-red-700">
                             مقدار مرجوعی: {formatWeight(item.returnedWeight)}
                           </div>
@@ -693,7 +784,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                                     <Check className="w-3.5 h-3.5" />
                                     تحویل داده شده ({formatWeight(item.producedWeight!)})
                                   </span>
-                                  {item.returnedWeight > 0 && (
+                                  {returned && item.returnedWeight > 0 && (
                                     <span className="tabular-nums text-xs font-bold text-red-700">
                                       (مرجوعی: {formatWeight(item.returnedWeight)})
                                     </span>
@@ -780,6 +871,21 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                               </span>
                             )}
                           </div>
+                          {isPartialReturn && (
+                            <div className="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
+                              {item.returnedWeight > 0 && (
+                                <span className="font-bold text-red-700">
+                                  مرجوعی: {formatWeight(item.returnedWeight)}
+                                </span>
+                              )}
+                              <span className="font-bold text-emerald-700">
+                                تحویل خالص به مشتری:{' '}
+                                {formatWeight(
+                                  Math.max(0, getShippingWeight(item) - item.returnedWeight)
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
@@ -822,14 +928,28 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                                   </span>
                                 </div>
                               ) : item.producedWeight !== null ? (
-                                <span className="font-semibold text-slate-900">
-                                  {formatWeight(item.producedWeight)}
-                                  {item.returnedWeight > 0 && (
-                                    <span className="text-xs font-bold text-red-700 mr-2">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                  <span className="font-semibold text-slate-900">
+                                    {formatWeight(item.producedWeight)}
+                                  </span>
+                                  {returned && item.returnedWeight > 0 && (
+                                    <span className="text-xs font-bold text-red-700">
                                       (مرجوعی: {formatWeight(item.returnedWeight)})
                                     </span>
                                   )}
-                                </span>
+                                  {isPartialReturn && (
+                                    <span className="text-xs font-bold text-emerald-700">
+                                      (تحویل خالص:{' '}
+                                      {formatWeight(
+                                        Math.max(
+                                          0,
+                                          getShippingWeight(item) - item.returnedWeight
+                                        )
+                                      )}
+                                      )
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="text-slate-400 text-xs">
                                   در انتظار توزین تولید ({formatWeight(weightForCalc)} تخمینی)
@@ -946,26 +1066,145 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             )}
           </div>
 
+          {/* Dual Confirmation Summary for Partial Returns in Finance */}
+          {department === 'finance' && isPartialReturn && (
+            <div className="px-4 sm:px-5 py-4 bg-slate-50/90 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-[13px] font-bold text-slate-900">
+                  وضعیت تایید دوگانه سفارش (مرجوعی جزئی + بار تحویل‌داده‌شده)
+                </h4>
+                <span className="text-[11px] font-semibold text-slate-500">
+                  در مرجوعی جزئی، هر دو بخش باید مستقل توسط صدور فاکتور تایید شوند
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* 1. Returned portion status */}
+                <div
+                  className={`rounded-xl border p-3 space-y-1.5 ${
+                    order.returnRecord?.confirmations.finance.confirmed
+                      ? 'bg-emerald-50/60 border-emerald-200'
+                      : awaitingShippingReceive
+                        ? 'bg-amber-50/70 border-amber-200'
+                        : 'bg-red-50/70 border-red-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-slate-900 inline-flex items-center gap-1.5">
+                      <RotateCcw className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                      ۱. بخش مرجوعی
+                    </span>
+                    <span className="tabular-nums font-bold text-red-700">
+                      {formatWeight(totalReturnedKg)}
+                    </span>
+                  </div>
+                  <div className="tabular-nums text-xs text-slate-600">
+                    کسر از فاکتور: <strong className="text-red-700">{formatRial(returnDeduction)}</strong>
+                  </div>
+                  <div className="text-[11px] font-bold pt-0.5">
+                    {order.returnRecord?.confirmations.finance.confirmed ? (
+                      <span className="text-emerald-700 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        تایید شده توسط صدور فاکتور
+                        {order.returnRecord.confirmations.finance.confirmedAt
+                          ? ` (${order.returnRecord.confirmations.finance.confirmedAt})`
+                          : ''}
+                      </span>
+                    ) : awaitingShippingReceive ? (
+                      <span className="text-amber-800 inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        در انتظار تحویل گرفتن و توزین بار مرجوعی در واحد ارسال
+                      </span>
+                    ) : (
+                      <span className="text-red-700 inline-flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        نیازمند تایید مرجوعی در کادر مرجوعی پایین
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. Delivered portion status */}
+                <div
+                  className={`rounded-xl border p-3 space-y-1.5 ${
+                    order.driverDelivery?.financeVerified
+                      ? 'bg-emerald-50/60 border-emerald-200'
+                      : order.driverDelivery?.sentToFinance
+                        ? 'bg-emerald-50/40 border-emerald-300'
+                        : driverDocsRejectedPending
+                          ? 'bg-red-50/70 border-red-200'
+                          : 'bg-amber-50/70 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-bold text-slate-900 inline-flex items-center gap-1.5">
+                      <PackageCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                      ۲. بار تحویل‌داده‌شده به مشتری
+                    </span>
+                    <span className="tabular-nums font-bold text-emerald-700">
+                      {formatWeight(netDeliveredTotalKg)}
+                    </span>
+                  </div>
+                  <div className="tabular-nums text-xs text-slate-600">
+                    مبلغ خالص قابل پرداخت:{' '}
+                    <strong className="text-[#0f5864]">{formatRial(netAfterReturn)}</strong>
+                  </div>
+                  <div className="text-[11px] font-bold pt-0.5">
+                    {order.driverDelivery?.financeVerified ? (
+                      <span className="text-emerald-700 inline-flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        مدارک فاکتور و رسید تایید شد ({order.driverDelivery.financeVerifiedAt})
+                      </span>
+                    ) : order.driverDelivery?.sentToFinance ? (
+                      <span className="text-emerald-800 inline-flex items-center gap-1">
+                        <Camera className="w-3.5 h-3.5 shrink-0" />
+                        مدارک ارسال شده — آماده بررسی و تایید در کادر زیر
+                      </span>
+                    ) : driverDocsRejectedPending ? (
+                      <span className="text-red-700 inline-flex items-center gap-1">
+                        <CameraOff className="w-3.5 h-3.5 shrink-0" />
+                        مدارک رد شد — در انتظار عکاسی مجدد راننده
+                      </span>
+                    ) : (
+                      <span className="text-amber-800 inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
+                        در انتظار ارسال عکس فاکتور و رسید توسط راننده
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Driver-Submitted Delivery Photos in Invoice Issuance & Sales */}
           {(department === 'finance' || department === 'sales') &&
+            !hideReturnForCurrentDept &&
             order.driverDelivery?.sentToFinance && (
             <div className="px-4 sm:px-5 py-4 bg-emerald-50/50 space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h4 className="text-[13px] font-bold text-emerald-950 inline-flex items-center gap-1.5">
                     <Camera className="w-4 h-4 text-emerald-700 shrink-0" />
-                    مدارک تحویل ارسال‌شده توسط راننده
+                    {isPartialReturn
+                      ? 'مدارک بار تحویل‌داده‌شده توسط راننده (باقی‌مانده پس از مرجوعی جزئی)'
+                      : 'مدارک تحویل ارسال‌شده توسط راننده'}
                   </h4>
-                  <p className="text-xs text-emerald-800/85 mt-0.5">
+                  <p className="text-xs text-emerald-800/85 mt-0.5 tabular-nums">
                     زمان ارسال: {order.driverDelivery.completedAt}
                     {order.driverName ? ` · راننده: ${order.driverName}` : ''}
+                    {isPartialReturn
+                      ? ` · وزن تحویلی خالص: ${formatWeight(netDeliveredTotalKg)} · مبلغ خالص: ${formatRial(netAfterReturn)}`
+                      : ''}
                   </p>
                 </div>
 
                 {order.driverDelivery.financeVerified ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl sm:rounded-md bg-emerald-100 text-emerald-900 border border-emerald-300 text-xs font-bold">
                     <CheckCircle2 className="w-4 h-4 shrink-0" />
-                    تایید شده توسط صدور فاکتور ({order.driverDelivery.financeVerifiedAt})
+                    {isPartialReturn
+                      ? `بار تحویل‌داده‌شده تایید شد (${order.driverDelivery.financeVerifiedAt})`
+                      : `تایید شده توسط صدور فاکتور (${order.driverDelivery.financeVerifiedAt})`}
                   </span>
                 ) : department === 'finance' ? (
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -983,7 +1222,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                       className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors whitespace-nowrap"
                     >
                       <CheckCheck className="w-4 h-4 shrink-0" />
-                      تایید مدارک تحویل
+                      {isPartialReturn ? 'تایید مدارک بار تحویل‌داده‌شده' : 'تایید مدارک تحویل'}
                     </button>
                   </div>
                 ) : (
@@ -1064,6 +1303,27 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </div>
             </div>
           )}
+
+          {/* Awaiting Driver Delivery Docs for Remaining Items on Partial Return */}
+          {(department === 'finance' || department === 'sales') &&
+            isPartialReturn &&
+            !order.driverDelivery?.sentToFinance &&
+            !driverDocsRejectedPending && (
+              <div className="px-4 sm:px-5 py-4 bg-amber-50/75 space-y-1.5">
+                <div className="flex items-start gap-2.5 text-amber-950">
+                  <Camera className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div className="space-y-1 text-xs leading-relaxed">
+                    <div className="font-bold text-amber-900">
+                      در انتظار ارسال عکس فاکتور و رسید بخش تحویل‌داده‌شده توسط راننده
+                    </div>
+                    <p className="text-amber-900/90 tabular-nums">
+                      از این سفارش مقدار <strong>{formatWeight(netDeliveredTotalKg)}</strong> به مبلغ خالص{' '}
+                      <strong>{formatRial(netAfterReturn)}</strong> به مشتری تحویل داده می‌شود. پس از ثبت عکس فاکتور و رسید توسط راننده، امکان تایید بار تحویل‌داده‌شده در همین بخش فعال می‌شود.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* Rejected Driver Docs Awaiting Driver Re-capture Notice in Finance */}
           {department === 'finance' && driverDocsRejectedPending && (
