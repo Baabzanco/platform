@@ -8,6 +8,7 @@ import {
   RotateCcw,
   Scale,
   Search,
+  Store,
   Zap,
 } from 'lucide-react';
 import {
@@ -37,6 +38,7 @@ interface FinancePageProps {
 
 type FinanceFilter =
   | 'all'
+  | 'in_person'
   | 'driver_docs'
   | 'waiting_prod'
   | 'ready'
@@ -139,6 +141,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     const filtered = orders.filter((order) => {
       const matchesFilter =
         filter === 'all' ||
+        (filter === 'in_person' && Boolean(order.isInPersonSale)) ||
         (filter === 'driver_docs' &&
           !isAwaitingShippingReturn(order) &&
           Boolean(
@@ -159,6 +162,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
       return (
         order.code.toLowerCase().includes(q) ||
         order.customerName.toLowerCase().includes(q) ||
+        (order.inPersonPaymentMethod ?? '').toLowerCase().includes(q) ||
         order.items.some((i) => i.productName.toLowerCase().includes(q))
       );
     });
@@ -267,11 +271,18 @@ export const FinancePage: React.FC<FinancePageProps> = ({
     }
     if (hasRejectedDriverDocsAwaitingRetake(order)) {
       return {
-        text: 'مدارک راننده رد شد — در انتظار عکس مجدد',
+        text: order.isInPersonSale
+          ? 'مدارک فروش حضوری رد شد — در انتظار عکس مجدد'
+          : 'مدارک راننده رد شد — در انتظار عکس مجدد',
         className: 'text-red-700',
       };
     }
     if (order.driverDelivery?.sentToFinance) {
+      if (order.isInPersonSale) {
+        return order.driverDelivery.financeVerified
+          ? { text: 'فروش حضوری · مدارک تایید شد', className: 'text-emerald-700' }
+          : { text: 'فروش حضوری · مدارک آماده بررسی', className: 'text-emerald-700' };
+      }
       return order.driverDelivery.financeVerified
         ? { text: 'مدارک تحویل راننده تایید شد', className: 'text-emerald-700' }
         : { text: 'مدارک تحویل دریافت شد (آماده بررسی)', className: 'text-emerald-700' };
@@ -330,7 +341,8 @@ export const FinancePage: React.FC<FinancePageProps> = ({
             {(
               [
                 { id: 'all', label: 'همه' },
-                { id: 'driver_docs', label: 'مدارک راننده' },
+                { id: 'in_person', label: 'فروش حضوری' },
+                { id: 'driver_docs', label: 'مدارک فاکتور و رسید' },
                 { id: 'ready', label: 'آماده تایید' },
                 { id: 'discrepancy', label: 'مغایرت وزن' },
                 { id: 'returned', label: 'مرجوعی' },
@@ -476,15 +488,23 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                     {pendingDriverDocs && (
                       <div className="no-print px-4 sm:px-5 py-2 bg-emerald-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
-                          <Camera className="w-3.5 h-3.5 shrink-0" />
-                          {isPartialReturn
-                            ? 'مدارک بار تحویل‌داده‌شده (باقی‌مانده پس از مرجوعی جزئی) دریافت شد — آماده تایید یا رد'
-                            : 'مدارک تحویل راننده دریافت شد — آماده بررسی (تایید یا رد)'}
+                          {order.isInPersonSale ? (
+                            <Store className="w-3.5 h-3.5 shrink-0" />
+                          ) : (
+                            <Camera className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          {order.isInPersonSale
+                            ? 'فروش حضوری — عکس فاکتور و رسید دریافت شد (آماده بررسی و تایید)'
+                            : isPartialReturn
+                              ? 'مدارک بار تحویل‌داده‌شده (باقی‌مانده پس از مرجوعی جزئی) دریافت شد — آماده تایید یا رد'
+                              : 'مدارک تحویل راننده دریافت شد — آماده بررسی (تایید یا رد)'}
                         </span>
                         <span className="tabular-nums opacity-95 text-[11px]">
-                          {isPartialReturn
-                            ? `خالص: ${formatRial(netAfterReturn)} · مشاهده عکس‌ها`
-                            : 'مشاهده عکس‌ها'}
+                          {order.isInPersonSale && order.inPersonPaymentMethod
+                            ? `${order.inPersonPaymentMethod} · مشاهده عکس‌ها`
+                            : isPartialReturn
+                              ? `خالص: ${formatRial(netAfterReturn)} · مشاهده عکس‌ها`
+                              : 'مشاهده عکس‌ها'}
                         </span>
                       </div>
                     )}
@@ -493,9 +513,11 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                       <div className="no-print px-4 sm:px-5 py-2 bg-red-100 text-red-900 border-b border-red-200 flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
                         <span className="inline-flex items-center gap-1.5">
                           <AlertTriangle className="w-3.5 h-3.5 text-red-600 shrink-0" />
-                          {isPartialReturn
-                            ? 'مدارک بار تحویل‌داده‌شده رد شد — در انتظار عکاسی مجدد راننده'
-                            : 'مدارک تحویل رد شد — در انتظار عکاسی مجدد راننده'}
+                          {order.isInPersonSale
+                            ? 'مدارک فروش حضوری رد شد — در انتظار عکاسی مجدد'
+                            : isPartialReturn
+                              ? 'مدارک بار تحویل‌داده‌شده رد شد — در انتظار عکاسی مجدد راننده'
+                              : 'مدارک تحویل رد شد — در انتظار عکاسی مجدد راننده'}
                         </span>
                         <span className="text-[11px] text-red-700 font-medium truncate max-w-[260px]">
                           {order.driverDelivery?.financeRejectionReason}
@@ -554,35 +576,51 @@ export const FinancePage: React.FC<FinancePageProps> = ({
 
                         <div className="min-w-0">
                           <span className="block text-[11px] text-slate-500 mb-0.5">
-                            طرف حساب و وضعیت اعتباری
+                            {order.isInPersonSale
+                              ? 'مشتری فروش حضوری و نحوه خرید'
+                              : 'طرف حساب و وضعیت اعتباری'}
                           </span>
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenCustomerProfile(order);
-                              }}
-                              title="مشاهده پروفایل طرف حساب"
-                              className="group inline-flex items-center gap-1 max-w-full font-semibold text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/40 hover:decoration-[#083942] underline-offset-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
-                            >
-                              <span className="truncate">{order.customerName}</span>
-                              <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
-                            </button>
-                            <CreditStandingTag
-                              standing={order.customerStanding}
-                              standingLabel={order.customerStandingLabel}
-                              size="xs"
-                            />
-                            {order.managementApproval?.approved &&
-                              (order.customerStanding === 'yellow' ||
-                                order.customerStanding === 'red' ||
-                                order.customerStanding === 'black') && (
-                                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                  تایید مدیریت
-                                </span>
-                              )}
-                          </div>
+                          {order.isInPersonSale ? (
+                            <div className="space-y-0.5 min-w-0">
+                              <div className="font-bold text-slate-900 truncate">
+                                {order.customerName}
+                              </div>
+                              <div className="text-[11px] font-semibold text-[#0f5864] truncate">
+                                فروش حضوری
+                                {order.inPersonPaymentMethod
+                                  ? ` · ${order.inPersonPaymentMethod}`
+                                  : ''}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenCustomerProfile(order);
+                                }}
+                                title="مشاهده پروفایل طرف حساب"
+                                className="group inline-flex items-center gap-1 max-w-full font-semibold text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/40 hover:decoration-[#083942] underline-offset-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                              >
+                                <span className="truncate">{order.customerName}</span>
+                                <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                              </button>
+                              <CreditStandingTag
+                                standing={order.customerStanding}
+                                standingLabel={order.customerStandingLabel}
+                                size="xs"
+                              />
+                              {order.managementApproval?.approved &&
+                                (order.customerStanding === 'yellow' ||
+                                  order.customerStanding === 'red' ||
+                                  order.customerStanding === 'black') && (
+                                  <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                    تایید مدیریت
+                                  </span>
+                                )}
+                            </div>
+                          )}
                         </div>
 
                         <div>

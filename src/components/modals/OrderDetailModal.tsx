@@ -20,6 +20,7 @@ import {
   RotateCcw,
   Scale,
   Stamp,
+  Store,
   Truck,
   Undo2,
   X,
@@ -308,9 +309,19 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
         : { text: 'مرجوع شده — در انتظار تایید صدور فاکتور', className: 'text-red-700' };
     }
     if (driverDocsRejectedPending) {
-      return { text: 'مدارک راننده رد شد — در انتظار عکس مجدد', className: 'text-red-700' };
+      return {
+        text: order.isInPersonSale
+          ? 'مدارک فروش حضوری رد شد — در انتظار عکس مجدد'
+          : 'مدارک راننده رد شد — در انتظار عکس مجدد',
+        className: 'text-red-700',
+      };
     }
     if (!hideReturnForCurrentDept && order.driverDelivery?.sentToFinance) {
+      if (order.isInPersonSale) {
+        return order.driverDelivery.financeVerified
+          ? { text: 'فروش حضوری · مدارک تایید شد', className: 'text-emerald-700' }
+          : { text: 'فروش حضوری · مدارک آماده بررسی', className: 'text-emerald-700' };
+      }
       return order.driverDelivery.financeVerified
         ? { text: 'مدارک تحویل راننده تایید شد', className: 'text-emerald-700' }
         : { text: 'مدارک تحویل دریافت شد (آماده بررسی)', className: 'text-emerald-700' };
@@ -463,10 +474,12 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 {access.canView('field_customer_name') && (
                   <div className="text-[13px] min-w-0">
                     <span className="block text-[11px] text-slate-500 mb-0.5">
-                      طرف حساب و وضعیت اعتباری
+                      {order.isInPersonSale
+                        ? 'مشتری فروش حضوری'
+                        : 'طرف حساب و وضعیت اعتباری'}
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {onOpenCustomerProfile ? (
+                      {onOpenCustomerProfile && !order.isInPersonSale ? (
                         <button
                           type="button"
                           onClick={() => onOpenCustomerProfile(order)}
@@ -481,11 +494,13 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                           {order.customerName}
                         </span>
                       )}
-                      <CreditStandingTag
-                        standing={order.customerStanding}
-                        standingLabel={order.customerStandingLabel}
-                        size="xs"
-                      />
+                      {!order.isInPersonSale && (
+                        <CreditStandingTag
+                          standing={order.customerStanding}
+                          standingLabel={order.customerStandingLabel}
+                          size="xs"
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -598,10 +613,31 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             department === 'sales' ||
             department === 'management') && (
             <>
+              {order.isInPersonSale && (
+                <div className="px-4 sm:px-5 py-3 bg-[#eef2f9]/80 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-slate-700">
+                  <span className="inline-flex items-center gap-1.5 font-bold text-[#0f5864]">
+                    <Store className="w-4 h-4 shrink-0" />
+                    ثبت‌شده از بخش فروش حضوری
+                  </span>
+                  <span>
+                    نحوه خرید (دستی):{' '}
+                    <strong className="text-slate-900">
+                      {order.inPersonPaymentMethod || 'ثبت‌نشده'}
+                    </strong>
+                  </span>
+                  {order.notes && (
+                    <span>
+                      توضیحات: <strong className="text-slate-900">{order.notes}</strong>
+                    </span>
+                  )}
+                </div>
+              )}
+
               {(access.canView('field_customer_phone') ||
-                access.canView('field_call_recording')) && (
+                access.canView('field_call_recording')) &&
+                (order.customerPhone || order.callDurationSeconds > 0 || ((department === 'sales' || department === 'management') && order.driverName)) && (
                 <div className="px-4 sm:px-5 py-3 bg-[#eef2f9]/60 flex flex-wrap items-center gap-3">
-                  {access.canView('field_customer_phone') && (
+                  {access.canView('field_customer_phone') && order.customerPhone && (
                     <a
                       href={`tel:${order.customerPhone.replace(/[^0-9+]/g, '')}`}
                       onClick={() => onCallCustomer(order)}
@@ -1186,13 +1222,19 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                 <div>
                   <h4 className="text-[13px] font-bold text-emerald-950 inline-flex items-center gap-1.5">
                     <Camera className="w-4 h-4 text-emerald-700 shrink-0" />
-                    {isPartialReturn
-                      ? 'مدارک بار تحویل‌داده‌شده توسط راننده (باقی‌مانده پس از مرجوعی جزئی)'
-                      : 'مدارک تحویل ارسال‌شده توسط راننده'}
+                    {order.isInPersonSale
+                      ? 'مدارک فروش حضوری (عکس فاکتور و رسید پرداخت)'
+                      : isPartialReturn
+                        ? 'مدارک بار تحویل‌داده‌شده توسط راننده (باقی‌مانده پس از مرجوعی جزئی)'
+                        : 'مدارک تحویل ارسال‌شده توسط راننده'}
                   </h4>
                   <p className="text-xs text-emerald-800/85 mt-0.5 tabular-nums">
                     زمان ارسال: {order.driverDelivery.completedAt}
-                    {order.driverName ? ` · راننده: ${order.driverName}` : ''}
+                    {order.isInPersonSale && order.inPersonPaymentMethod
+                      ? ` · نحوه خرید: ${order.inPersonPaymentMethod}`
+                      : order.driverName
+                        ? ` · راننده: ${order.driverName}`
+                        : ''}
                     {isPartialReturn
                       ? ` · وزن تحویلی خالص: ${formatWeight(netDeliveredTotalKg)} · مبلغ خالص: ${formatRial(netAfterReturn)}`
                       : ''}
@@ -1222,7 +1264,11 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                       className="min-h-[44px] sm:min-h-0 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl sm:rounded-md text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors whitespace-nowrap"
                     >
                       <CheckCheck className="w-4 h-4 shrink-0" />
-                      {isPartialReturn ? 'تایید مدارک بار تحویل‌داده‌شده' : 'تایید مدارک تحویل'}
+                      {order.isInPersonSale
+                        ? 'تایید مدارک فروش حضوری'
+                        : isPartialReturn
+                          ? 'تایید مدارک بار تحویل‌داده‌شده'
+                          : 'تایید مدارک تحویل'}
                     </button>
                   </div>
                 ) : (
@@ -1325,14 +1371,16 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               </div>
             )}
 
-          {/* Rejected Driver Docs Awaiting Driver Re-capture Notice in Finance */}
+          {/* Rejected Docs Awaiting Re-capture Notice in Finance */}
           {department === 'finance' && driverDocsRejectedPending && (
             <div className="px-4 sm:px-5 py-4 bg-red-50/90 space-y-2">
               <div className="flex items-start gap-2.5 text-red-900">
                 <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                 <div className="space-y-1 text-xs leading-relaxed">
                   <div className="font-bold text-red-800">
-                    مدارک تحویل رد شده و در اولویت قرمز راننده جهت عکاسی مجدد قرار دارد
+                    {order.isInPersonSale
+                      ? 'مدارک فروش حضوری رد شده و در صفحه فروش حضوری جهت ثبت عکس مجدد مشخص شده است'
+                      : 'مدارک تحویل رد شده و در اولویت قرمز راننده جهت عکاسی مجدد قرار دارد'}
                   </div>
                   <div>
                     <strong>دلیل رد ثبت‌شده:</strong>{' '}
@@ -1340,7 +1388,10 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                   </div>
                   <div className="text-red-700/90">
                     زمان رد: {order.driverDelivery?.financeRejectedAt}
-                    {' · '}در انتظار ثبت عکس جدید و ارسال مجدد توسط راننده
+                    {' · '}
+                    {order.isInPersonSale
+                      ? 'در انتظار بارگذاری عکس جدید و ارسال مجدد از بخش فروش حضوری'
+                      : 'در انتظار ثبت عکس جدید و ارسال مجدد توسط راننده'}
                   </div>
                 </div>
               </div>
@@ -1567,7 +1618,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 flex-wrap justify-end">
-              {!returnedToSales && (
+              {!returnedToSales && !order.isInPersonSale && (
                 <button
                   type="button"
                   onClick={() => onOpenReturnToSales(order, 'finance')}
@@ -1588,7 +1639,9 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
               {financeApproved && (
                 <span className="inline-flex items-center justify-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3.5 py-2.5 sm:py-2 rounded-xl sm:rounded-md text-xs font-bold">
                   <CheckCircle2 className="w-4 h-4" />
-                  تایید شده - ارسال به بخش ارسال
+                  {order.isInPersonSale
+                    ? 'سفارش فروش حضوری (ثبت مستقیم)'
+                    : 'تایید شده - ارسال به بخش ارسال'}
                 </span>
               )}
 

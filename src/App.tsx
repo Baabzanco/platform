@@ -8,10 +8,12 @@ import { DailyCalendarBar, DayBadgeMetrics } from './components/DailyCalendarBar
 import { Sidebar } from './components/Sidebar';
 import { ToastContainer } from './components/ToastContainer';
 import { DriverOrderModal } from './components/modals/DriverOrderModal';
+import { InPersonOrderDetailModal } from './components/modals/InPersonOrderDetailModal';
 import {
   LocationMapModal,
   LocationModalMode,
 } from './components/modals/LocationMapModal';
+import { NewInPersonSaleModal } from './components/modals/NewInPersonSaleModal';
 import { NewInvoiceModal } from './components/modals/NewInvoiceModal';
 import { OrderDetailModal } from './components/modals/OrderDetailModal';
 import {
@@ -31,6 +33,7 @@ import { CustomerProfilePage } from './components/pages/CustomerProfilePage';
 import { CustomersListPage } from './components/pages/CustomersListPage';
 import { DriverPage } from './components/pages/DriverPage';
 import { FinancePage } from './components/pages/FinancePage';
+import { InPersonSalesPage } from './components/pages/InPersonSalesPage';
 import { ManagementPage } from './components/pages/ManagementPage';
 import { ProductionPage } from './components/pages/ProductionPage';
 import { ProductPhotosPage } from './components/pages/ProductPhotosPage';
@@ -88,6 +91,8 @@ export default function App() {
     verifyDriverDocumentsInFinance,
     rejectDriverDocumentsInFinance,
     createOrder,
+    createInPersonSale,
+    resubmitInPersonSaleDocs,
     resubmitOrderToProduction,
     approveManagementOrder,
     returnOrderToSales,
@@ -183,6 +188,7 @@ export default function App() {
     open: boolean;
     editingOrder: Order | null;
   }>({ open: false, editingOrder: null });
+  const [inPersonSaleModalOpen, setInPersonSaleModalOpen] = useState(false);
   const [returnToSalesTarget, setReturnToSalesTarget] = useState<{
     order: Order;
     source: ReturnToSalesSource;
@@ -231,6 +237,14 @@ export default function App() {
     const deptForSeen: WorkflowDepartment = activeWorkflowDept ?? 'production';
 
     for (const order of orders) {
+      // Strict visibility isolation:
+      // In-person sales appear ONLY in 'in_person_sales' and 'finance'
+      if (activePage === 'in_person_sales') {
+        if (!order.isInPersonSale) continue;
+      } else if (activePage !== 'finance') {
+        if (order.isInPersonSale) continue;
+      }
+
       if (activePage === 'driver') {
         const isPartialRet =
           order.status === 'returned' &&
@@ -273,6 +287,12 @@ export default function App() {
       }
       map[key].totalCount += 1;
       if (
+        activePage === 'in_person_sales' &&
+        order.driverDelivery?.financeRejected &&
+        !order.driverDelivery?.sentToFinance
+      ) {
+        map[key].unseenCount += 1;
+      } else if (
         activePage === 'management' &&
         order.status === 'pending_management_approval'
       ) {
@@ -290,10 +310,22 @@ export default function App() {
     [orders, selectedDateKey]
   );
 
-  // Count of orders with Finance-rejected driver photos (for red Driver nav badge)
+  // Strict isolation: standard orders exclude in-person sales; in-person orders include only in-person sales
+  const standardDayOrders = useMemo(
+    () => dayOrders.filter((order) => !order.isInPersonSale),
+    [dayOrders]
+  );
+
+  const inPersonDayOrders = useMemo(
+    () => dayOrders.filter((order) => Boolean(order.isInPersonSale)),
+    [dayOrders]
+  );
+
+  // Count of orders with Finance-rejected driver photos (for red Driver nav badge — excludes in-person sales)
   const rejectedDriverDocsCount = useMemo(
     () =>
       orders.filter((order) => {
+        if (order.isInPersonSale) return false;
         const isPartialRet =
           order.status === 'returned' &&
           Boolean(order.returnRecord) &&
@@ -315,6 +347,18 @@ export default function App() {
     [orders]
   );
 
+  // Count of in-person sales with Finance-rejected photos (for red In-Person Sales nav badge)
+  const rejectedInPersonDocsCount = useMemo(
+    () =>
+      orders.filter(
+        (order) =>
+          Boolean(order.isInPersonSale) &&
+          order.driverDelivery?.financeRejected &&
+          !order.driverDelivery?.sentToFinance
+      ).length,
+    [orders]
+  );
+
   const selectedOrder =
     selectedOrderId !== null
       ? orders.find((o) => o.id === selectedOrderId) ?? null
@@ -327,6 +371,7 @@ export default function App() {
 
   const hasSubModalOpen =
     invoiceModalState.open ||
+    inPersonSaleModalOpen ||
     returnToSalesTarget !== null ||
     weightTarget !== null ||
     rejectTarget !== null ||
@@ -495,6 +540,7 @@ export default function App() {
         onSelectPage={handleSelectPage}
         unreadCounts={unreadCounts}
         rejectedDriverDocsCount={rejectedDriverDocsCount}
+        rejectedInPersonDocsCount={rejectedInPersonDocsCount}
         onRequestReset={() => setResetOpen(true)}
       />
 
@@ -516,7 +562,7 @@ export default function App() {
 
           {activePage === 'sales' && (
             <SalesPage
-              orders={dayOrders}
+              orders={standardDayOrders}
               printingOrderId={printingOrderId}
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
@@ -532,9 +578,19 @@ export default function App() {
             />
           )}
 
+          {activePage === 'in_person_sales' && (
+            <InPersonSalesPage
+              orders={inPersonDayOrders}
+              printingOrderId={printingOrderId}
+              onPrintAll={handlePrintAll}
+              onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+              onOpenNewSale={() => setInPersonSaleModalOpen(true)}
+            />
+          )}
+
           {activePage === 'management' && (
             <ManagementPage
-              orders={dayOrders}
+              orders={standardDayOrders}
               customers={customers}
               printingOrderId={printingOrderId}
               access={FULL_ACCESS}
@@ -551,7 +607,7 @@ export default function App() {
 
           {activePage === 'production' && (
             <ProductionPage
-              orders={dayOrders}
+              orders={standardDayOrders}
               printingOrderId={printingOrderId}
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
@@ -573,7 +629,7 @@ export default function App() {
 
           {activePage === 'shipping' && (
             <ShippingPage
-              orders={dayOrders}
+              orders={standardDayOrders}
               printingOrderId={printingOrderId}
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
@@ -583,7 +639,7 @@ export default function App() {
 
           {activePage === 'driver' && (
             <DriverPage
-              orders={dayOrders}
+              orders={standardDayOrders}
               printingOrderId={printingOrderId}
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
@@ -682,7 +738,7 @@ export default function App() {
               <CustomerProfilePage
                 customer={selectedCustomer}
                 allCustomers={customers}
-                orders={orders}
+                orders={orders.filter((o) => !o.isInPersonSale)}
                 onBackToList={() => setSelectedCustomerId(null)}
                 onSwitchCustomer={(id) => setSelectedCustomerId(id)}
                 onUpdateCustomer={updateCustomerBasic}
@@ -778,11 +834,26 @@ export default function App() {
         />
       )}
 
+      {/* In-Person Sales Order Detail & Photo Retake Modal */}
+      {activePage === 'in_person_sales' && (
+        <InPersonOrderDetailModal
+          order={
+            selectedOrder && selectedOrder.isInPersonSale ? selectedOrder : null
+          }
+          onClose={() => setSelectedOrderId(null)}
+          onPrintSingle={handlePrintSingle}
+          onUploadDocument={uploadDriverDocument}
+          onRemoveDocument={removeDriverDocument}
+          onResubmitDocs={resubmitInPersonSaleDocs}
+        />
+      )}
+
       {/* Driver Panel Order Action Popup Modal */}
       {activePage === 'driver' && (
         <DriverOrderModal
           order={
             selectedOrder &&
+            !selectedOrder.isInPersonSale &&
             (selectedOrder.status === 'delivered' ||
               (selectedOrder.status === 'returned' &&
                 Boolean(selectedOrder.returnRecord) &&
@@ -953,6 +1024,20 @@ export default function App() {
         }}
       />
 
+      {/* In-Person Sales: Create New Walk-In Sale Modal */}
+      <NewInPersonSaleModal
+        open={inPersonSaleModalOpen}
+        defaultDateKey={selectedDateKey}
+        weekDays={weekDays}
+        onClose={() => setInPersonSaleModalOpen(false)}
+        onCreateSale={(input) => {
+          createInPersonSale(input);
+          if (input.deliveryDate !== selectedDateKey) {
+            setSelectedDateKey(input.deliveryDate);
+          }
+        }}
+      />
+
       {/* Return Order to Sales Modal (Available across Production, Finance, Shipping, Driver) */}
       <ReturnToSalesModal
         open={returnToSalesTarget !== null}
@@ -978,6 +1063,7 @@ export default function App() {
           setSelectedOrderId(null);
           setSelectedCustomerId(null);
           setInvoiceModalState({ open: false, editingOrder: null });
+          setInPersonSaleModalOpen(false);
           setReturnToSalesTarget(null);
           setDriverReturnOrder(null);
           setShippingReturnReceiveOrder(null);

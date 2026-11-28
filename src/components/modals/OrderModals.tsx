@@ -360,13 +360,19 @@ export const DriverDocsRejectModal: React.FC<DriverDocsRejectModalProps> = ({
     onClose();
   };
 
+  const isInPerson = Boolean(order?.isInPersonSale);
+
   return (
     <ModalShell
       open={open}
       onClose={onClose}
       tone="danger"
       icon={<CameraOff className="w-4 h-4 shrink-0" />}
-      title={`رد عکس مدارک تحویل — سفارش ${order?.code ?? ''}`}
+      title={
+        isInPerson
+          ? `رد عکس مدارک فروش حضوری — سفارش ${order?.code ?? ''}`
+          : `رد عکس مدارک تحویل — سفارش ${order?.code ?? ''}`
+      }
       footer={
         <>
           <button
@@ -381,14 +387,24 @@ export const DriverDocsRejectModal: React.FC<DriverDocsRejectModalProps> = ({
             form="driver-docs-reject-form"
             className="w-full sm:w-auto min-h-[48px] sm:min-h-0 px-5 py-2.5 sm:py-2 text-sm sm:text-xs font-bold text-white bg-red-600 rounded-xl sm:rounded-lg hover:bg-red-700 transition-colors"
           >
-            رد مدارک و ارسال فوری به راننده
+            {isInPerson
+              ? 'رد مدارک و ارجاع به فروش حضوری'
+              : 'رد مدارک و ارسال فوری به راننده'}
           </button>
         </>
       }
     >
       <form id="driver-docs-reject-form" onSubmit={handleSubmit} className="space-y-4">
         <p className="text-xs text-slate-600 leading-relaxed">
-          پس از ثبت رد، این سفارش به‌صورت <strong className="text-red-700">قرمز و در اولویت اول</strong> پنل راننده نمایش داده می‌شود تا مجدداً عکس گرفته و ارسال کند.
+          {isInPerson ? (
+            <>
+              پس از ثبت رد، این سفارش به‌صورت <strong className="text-red-700">قرمز و در اولویت اول</strong> صفحه فروش حضوری نمایش داده می‌شود تا مجدداً عکس بارگذاری و ارسال گردد.
+            </>
+          ) : (
+            <>
+              پس از ثبت رد، این سفارش به‌صورت <strong className="text-red-700">قرمز و در اولویت اول</strong> پنل راننده نمایش داده می‌شود تا مجدداً عکس گرفته و ارسال کند.
+            </>
+          )}
         </p>
 
         {/* Select which documents need retake */}

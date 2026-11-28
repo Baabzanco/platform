@@ -2,6 +2,7 @@ import { CustomerStandingTier } from './customer';
 
 export type Department =
   | 'sales'
+  | 'in_person_sales'
   | 'management'
   | 'production'
   | 'finance'
@@ -167,6 +168,8 @@ export interface Order {
   createdAt: string;
   createdAtTimestamp?: number;
   lastActionAt: number;
+  isInPersonSale?: boolean;
+  inPersonPaymentMethod?: string;
 }
 
 export interface CreateOrderItemInput {
@@ -187,6 +190,21 @@ export interface CreateOrderInput {
   deliverySlot: string;
   notes: string;
   items: CreateOrderItemInput[];
+}
+
+export interface CreateInPersonSaleInput {
+  customerName: string;
+  customerPhone?: string;
+  paymentMethod: string;
+  deliveryDate: string;
+  notes?: string;
+  invoicePhoto: UploadedDocumentPhoto;
+  paymentReceiptPhoto: UploadedDocumentPhoto;
+  items: Array<{
+    productName: string;
+    weight: number;
+    unitPrice: number;
+  }>;
 }
 
 export interface Driver {

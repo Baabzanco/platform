@@ -9,6 +9,7 @@ import {
   RotateCcw,
   ShieldAlert,
   ShieldCheck,
+  Store,
   Truck,
   UserCircle2,
   Users,
@@ -21,6 +22,7 @@ interface SidebarProps {
   onSelectPage: (page: Department) => void;
   unreadCounts: Record<NotificationDepartment, number>;
   rejectedDriverDocsCount: number;
+  rejectedInPersonDocsCount: number;
   onRequestReset: () => void;
 }
 
@@ -31,6 +33,7 @@ const NAV_ITEMS: Array<{
   icon: React.FC<{ className?: string }>;
   badgeKey?: NotificationDepartment;
   isDriver?: boolean;
+  isInPerson?: boolean;
 }> = [
   {
     id: 'sales',
@@ -38,6 +41,13 @@ const NAV_ITEMS: Array<{
     shortLabel: 'فروش',
     icon: FilePlus2,
     badgeKey: 'sales',
+  },
+  {
+    id: 'in_person_sales',
+    label: 'فروش حضوری',
+    shortLabel: 'فروش حضوری',
+    icon: Store,
+    isInPerson: true,
   },
   {
     id: 'management',
@@ -106,6 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectPage,
   unreadCounts,
   rejectedDriverDocsCount,
+  rejectedInPersonDocsCount,
   onRequestReset,
 }) => {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -113,22 +124,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const getBadgeCount = (item: (typeof NAV_ITEMS)[number]) => {
     if (item.badgeKey) return unreadCounts[item.badgeKey];
     if (item.isDriver) return rejectedDriverDocsCount;
+    if (item.isInPerson) return rejectedInPersonDocsCount;
     return 0;
   };
 
   const isMoreActive =
+    activePage === 'in_person_sales' ||
     activePage === 'management' ||
     activePage === 'driver' ||
     activePage === 'access' ||
     activePage === 'customers' ||
     activePage === 'product_photos';
 
-  const moreBadgeCount = unreadCounts.management + rejectedDriverDocsCount;
+  const moreBadgeCount =
+    unreadCounts.management +
+    rejectedDriverDocsCount +
+    rejectedInPersonDocsCount;
 
   return (
     <>
       {/* Desktop Side Rail (hidden on mobile) */}
-      <aside className="no-print hidden md:flex w-[78px] shrink-0 bg-white border-l border-slate-200 flex-col items-center py-4 z-30 select-none">
+      <aside className="no-print hidden md:flex relative w-[78px] shrink-0 bg-white border-l border-slate-200 flex-col items-center py-4 z-30 overflow-visible select-none">
         {/* Static User Profile */}
         <div className="flex flex-col items-center text-center px-1 mb-6">
           <div className="w-10 h-10 rounded-full flex items-center justify-center mb-1.5 border bg-[#0f5864]/10 text-[#0f5864] border-[#0f5864]/25">
@@ -140,7 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Navigation Links */}
-        <nav aria-label="منوی بخش‌ها" className="flex-1 w-full flex flex-col items-center gap-3">
+        <nav aria-label="منوی بخش‌ها" className="flex-1 w-full flex flex-col items-center gap-3 overflow-visible">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
@@ -157,13 +173,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <button
                   type="button"
                   onClick={() => onSelectPage(item.id)}
-                  title={item.label}
                   aria-label={item.label}
                   aria-current={isActive ? 'page' : undefined}
                   className={`group relative w-11 h-11 rounded-xl flex items-center justify-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] focus-visible:ring-offset-2 ${
                     isActive
                       ? 'bg-[#0f5864] text-white shadow-sm'
-                      : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                      : 'text-slate-500 hover:bg-slate-100 hover:text-[#0f5864]'
                   }`}
                 >
                   <Icon className="w-5 h-5" />
@@ -172,8 +187,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       {badgeCount}
                     </span>
                   )}
-                  <span className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute right-[calc(100%+10px)] whitespace-nowrap bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-md shadow-md z-50">
-                    {item.label}
+
+                  {/* Hover Page Name Callout */}
+                  <span
+                    role="tooltip"
+                    className={`pointer-events-none opacity-0 translate-x-1.5 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all duration-150 ease-out absolute right-full mr-3 top-1/2 -translate-y-1/2 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 z-50 border shadow-[0_8px_24px_-4px_rgba(15,23,42,0.16)] ${
+                      isActive
+                        ? 'bg-[#0f5864] text-white border-[#0b434d]'
+                        : 'bg-white text-slate-800 border-slate-200'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`absolute top-1/2 -translate-y-1/2 -right-[5px] w-2.5 h-2.5 rotate-45 border-t border-r ${
+                        isActive
+                          ? 'bg-[#0f5864] border-[#0b434d]'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    />
+                    <span className="relative">{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="relative tabular-nums min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
+                        {badgeCount}
+                      </span>
+                    )}
                   </span>
                 </button>
               </React.Fragment>
@@ -182,17 +219,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
 
         {/* Reset Demo Data Button */}
-        <div className="pt-4 border-t border-slate-100 w-full flex flex-col items-center">
+        <div className="pt-4 border-t border-slate-100 w-full flex flex-col items-center overflow-visible">
           <button
             type="button"
             onClick={onRequestReset}
-            title="بازنشانی داده‌های نمونه"
             aria-label="بازنشانی داده‌های نمونه"
             className="group relative w-11 h-11 rounded-xl flex items-center justify-center text-red-600 hover:bg-red-50 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           >
             <RotateCcw className="w-5 h-5" />
-            <span className="pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 absolute right-[calc(100%+10px)] whitespace-nowrap bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-md shadow-md z-50">
-              بازنشانی داده‌های نمونه
+            <span
+              role="tooltip"
+              className="pointer-events-none opacity-0 translate-x-1.5 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all duration-150 ease-out absolute right-full mr-3 top-1/2 -translate-y-1/2 whitespace-nowrap px-3 py-2 rounded-xl text-xs font-bold bg-white text-red-700 border border-red-200 shadow-[0_8px_24px_-4px_rgba(15,23,42,0.16)] z-50"
+            >
+              <span
+                aria-hidden="true"
+                className="absolute top-1/2 -translate-y-1/2 -right-[5px] w-2.5 h-2.5 rotate-45 bg-white border-t border-r border-red-200"
+              />
+              <span className="relative">بازنشانی داده‌های نمونه</span>
             </span>
           </button>
         </div>
@@ -311,6 +354,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             <div className="p-3 space-y-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMoreOpen(false);
+                  onSelectPage('in_person_sales');
+                }}
+                className={`w-full min-h-[48px] px-4 rounded-xl flex items-center justify-between gap-3 text-sm font-semibold transition-colors ${
+                  activePage === 'in_person_sales'
+                    ? 'bg-[#0f5864]/10 text-[#0f5864]'
+                    : 'text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <span className="flex items-center gap-3">
+                  <Store className="w-5 h-5 shrink-0" />
+                  <span>فروش حضوری</span>
+                </span>
+                {rejectedInPersonDocsCount > 0 && (
+                  <span className="tabular-nums min-w-[22px] h-[22px] px-1.5 rounded-full bg-red-600 text-white text-[11px] font-bold flex items-center justify-center">
+                    {rejectedInPersonDocsCount}
+                  </span>
+                )}
+              </button>
+
               <button
                 type="button"
                 onClick={() => {

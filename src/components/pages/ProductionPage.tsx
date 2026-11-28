@@ -1,13 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
-  ArrowLeftRight,
   Boxes,
   Check,
   CheckCircle2,
   ChevronLeft,
   ClipboardList,
   Clock,
-  Layers,
   Printer,
   RotateCcw,
   Search,
@@ -29,7 +27,7 @@ interface ProductionPageProps {
   onOpenWeight: (order: Order, item: OrderItem) => void;
 }
 
-type ProdTab = 'orders' | 'prep' | 'prep_v2';
+type ProdTab = 'orders' | 'prep';
 type ProdFilter =
   | 'all'
   | 'in_progress'
@@ -249,25 +247,6 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
                 ({prepSummary.rows.length})
               </span>
               {activeTab === 'prep' && (
-                <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveTab('prep_v2')}
-              className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap shrink-0 ${
-                activeTab === 'prep_v2'
-                  ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
-                  : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
-              }`}
-            >
-              <Layers className="w-4 h-4 shrink-0" />
-              <span>نیاز به آماده‌سازی ورژن ۲</span>
-              <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
-                ({prepSummary.rows.length})
-              </span>
-              {activeTab === 'prep_v2' && (
                 <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
               )}
             </button>
@@ -529,213 +508,8 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
         </div>
       )}
 
-      {/* Tab 2: Horizontally Scrollable Preparation Needs Matrix */}
+      {/* Tab 2: Preparation Needs — Per-Product Tabs with Vertical Non-Scrolling List */}
       {activeTab === 'prep' && (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-            <p className="inline-flex items-center gap-1.5">
-              <ArrowLeftRight className="w-3.5 h-3.5 text-[#0f5864] shrink-0" />
-              چیدمان ستون‌ها بر اساس زمان ثبت فاکتور است (قدیمی‌ترین در وزن ۱ و جدیدترها در ستون‌های بعدی).
-            </p>
-            <span className="tabular-nums font-semibold text-[#0f5864]">
-              {prepSummary.rows.length} محصول · حداکثر {prepSummary.maxColumns} سفارش هم‌زمان
-            </span>
-          </div>
-
-          <div className="bg-white border border-[#7a9cbf] rounded-xl overflow-x-auto shadow-xs">
-            {prepSummary.rows.length === 0 ? (
-              <div className="p-10 text-center text-sm text-slate-500">
-                تمامی سفارش‌های صف تولید تکمیل یا تعیین‌تکلیف شده‌اند؛ موردی برای آماده‌سازی باقی نمانده است.
-              </div>
-            ) : (
-              <table className="w-max min-w-full border-collapse text-xs sm:text-[13px] text-center">
-                <thead>
-                  <tr className="bg-slate-50 text-[#0f5864] border-b border-slate-200">
-                    <th className="sticky right-0 z-20 bg-slate-50 text-right font-bold px-3 sm:px-5 py-3 border-l-2 border-slate-200 whitespace-nowrap min-w-[125px] sm:min-w-[180px]">
-                      نام محصول
-                    </th>
-                    {Array.from({ length: prepSummary.maxColumns }).map((_, colIdx) => (
-                      <React.Fragment key={colIdx}>
-                        <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[138px] sm:min-w-[152px]">
-                          وزن {colIdx + 1}
-                        </th>
-                        <th className="font-bold px-3 sm:px-4 py-3 border-l border-slate-100 whitespace-nowrap min-w-[84px] sm:min-w-[96px]">
-                          بازه {colIdx + 1}
-                        </th>
-                        <th className="font-bold px-3 sm:px-4 py-3 border-l-2 border-slate-200 whitespace-nowrap min-w-[84px] sm:min-w-[96px]">
-                          کد {colIdx + 1}
-                        </th>
-                      </React.Fragment>
-                    ))}
-                    <th className="sticky left-0 z-20 font-bold px-3 sm:px-5 py-3 bg-emerald-50 text-emerald-800 border-r-2 border-emerald-200 whitespace-nowrap min-w-[88px] sm:min-w-[110px]">
-                      مجموع (kg)
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {prepSummary.rows.map((row) => {
-                    const defaultAlloc =
-                      row.allocations.find((a) => a.producedWeight === null) ??
-                      row.allocations[0];
-
-                    const handleOpenRowDefaultWeight = () => {
-                      if (defaultAlloc) {
-                        handleOpenPrepWeight(
-                          defaultAlloc.orderId,
-                          defaultAlloc.itemId
-                        );
-                      }
-                    };
-
-                    return (
-                      <tr
-                        key={row.productName}
-                        className="group hover:bg-slate-50/90 transition-colors"
-                      >
-                        <td
-                          role="button"
-                          tabIndex={0}
-                          onClick={handleOpenRowDefaultWeight}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault();
-                              handleOpenRowDefaultWeight();
-                            }
-                          }}
-                          title="برای ثبت وزن کلیک کنید"
-                          className="sticky right-0 z-10 bg-white group-hover:bg-slate-50 hover:bg-sky-50/70 text-right font-bold px-3 sm:px-5 py-3 border-l-2 border-slate-200 text-slate-900 hover:text-[#0f5864] whitespace-nowrap cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
-                        >
-                          {row.productName}
-                        </td>
-                        {Array.from({ length: prepSummary.maxColumns }).map(
-                          (_, colIdx) => {
-                            const alloc = row.allocations[colIdx];
-                            if (!alloc) {
-                              return (
-                                <React.Fragment key={colIdx}>
-                                  <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">
-                                    —
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-300">
-                                    —
-                                  </td>
-                                  <td className="px-3 sm:px-4 py-3 border-l-2 border-slate-200 text-slate-300">
-                                    —
-                                  </td>
-                                </React.Fragment>
-                              );
-                            }
-                            const isWeighed = alloc.producedWeight !== null;
-                            const openAllocWeight = () =>
-                              handleOpenPrepWeight(alloc.orderId, alloc.itemId);
-
-                            return (
-                              <React.Fragment
-                                key={`${alloc.orderId}-${alloc.itemId}`}
-                              >
-                                <td
-                                  onClick={openAllocWeight}
-                                  title="برای ثبت وزن کلیک کنید"
-                                  className={`tabular-nums px-2.5 sm:px-3.5 py-2.5 border-l border-slate-100 whitespace-nowrap cursor-pointer transition-colors ${
-                                    isWeighed
-                                      ? 'bg-emerald-50/70 hover:bg-emerald-100/70'
-                                      : 'hover:bg-sky-50/70'
-                                  }`}
-                                >
-                                  <div className="inline-flex items-center justify-center gap-2">
-                                    <div className="text-right">
-                                      <span className="font-bold text-slate-800 block leading-tight">
-                                        {alloc.requestedWeight} kg
-                                      </span>
-                                      {isWeighed && (
-                                        <span className="block text-[10px] font-bold text-emerald-700 leading-tight mt-0.5">
-                                          ثبت: {alloc.producedWeight} kg
-                                        </span>
-                                      )}
-                                    </div>
-
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        openAllocWeight();
-                                      }}
-                                      className={`no-print min-h-[32px] px-2.5 py-1 rounded-lg text-[11px] font-bold inline-flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 ${
-                                        isWeighed
-                                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                          : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
-                                      }`}
-                                    >
-                                      {isWeighed ? (
-                                        <>
-                                          <Check className="w-3 h-3 shrink-0" />
-                                          ثبت شد
-                                        </>
-                                      ) : (
-                                        'ثبت'
-                                      )}
-                                    </button>
-                                  </div>
-                                </td>
-                                <td
-                                  onClick={openAllocWeight}
-                                  title="برای ثبت وزن کلیک کنید"
-                                  className={`px-3 sm:px-4 py-3 border-l border-slate-100 text-slate-600 whitespace-nowrap cursor-pointer transition-colors ${
-                                    isWeighed
-                                      ? 'bg-emerald-50/40 hover:bg-emerald-100/60'
-                                      : 'hover:bg-sky-50/70'
-                                  }`}
-                                >
-                                  {alloc.deliverySlot}
-                                </td>
-                                <td
-                                  onClick={openAllocWeight}
-                                  title={`برای ثبت وزن کلیک کنید · زمان ثبت فاکتور: ${alloc.createdAt}`}
-                                  className={`tabular-nums px-3 sm:px-4 py-2.5 border-l-2 border-slate-200 font-bold text-[#0056b3] whitespace-nowrap cursor-pointer transition-colors ${
-                                    isWeighed
-                                      ? 'bg-emerald-50/40 hover:bg-emerald-100/60'
-                                      : 'hover:bg-sky-50/70'
-                                  }`}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openAllocWeight();
-                                    }}
-                                    className="min-h-[36px] px-2 hover:underline text-[#0056b3] font-bold flex flex-col items-center justify-center mx-auto leading-tight"
-                                  >
-                                    <span>{alloc.orderCode}</span>
-                                    <span className="text-[10px] font-medium text-slate-400 mt-0.5">
-                                      {alloc.createdAt.includes(' - ')
-                                        ? alloc.createdAt.split(' - ')[1]
-                                        : alloc.createdAt}
-                                    </span>
-                                  </button>
-                                </td>
-                              </React.Fragment>
-                            );
-                          }
-                        )}
-                        <td
-                          onClick={handleOpenRowDefaultWeight}
-                          title="برای ثبت وزن کلیک کنید"
-                          className="sticky left-0 z-10 tabular-nums px-3 sm:px-5 py-3 bg-emerald-50 hover:bg-emerald-100/80 text-emerald-800 border-r-2 border-emerald-200 font-bold whitespace-nowrap cursor-pointer transition-colors"
-                        >
-                          {row.totalRequestedWeight} kg
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Tab 3: Preparation Needs V2 — Per-Product Tabs with Vertical Non-Scrolling List */}
-      {activeTab === 'prep_v2' && (
         <div className="flex flex-col gap-3.5 w-full">
           {prepSummary.rows.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-sm text-slate-500">

@@ -1128,9 +1128,9 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
 
           {/* TAB 2: رخداد حسابداری (Read-Only Excel-Style Ledger) */}
           {activeTab === 'accounting' && (
-            <section className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-2xs">
+            <section className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-2xs flex flex-col h-[460px] xl:h-[620px]">
               {/* Top Excel Toolbar Header */}
-              <div className="px-4 py-3 bg-[#f3f6f4] border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="shrink-0 px-4 py-3 bg-[#f3f6f4] border-b border-slate-300 flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2 text-xs">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-700 shrink-0" />
                   <h2 className="text-sm font-bold text-slate-900">
@@ -1143,7 +1143,7 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
               </div>
 
               {/* Compact Summary Formula Bar */}
-              <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs tabular-nums">
+              <div className="shrink-0 px-4 py-2.5 bg-slate-50 border-b border-slate-300 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs tabular-nums">
                 <div className="flex items-center justify-between sm:justify-start sm:gap-2">
                   <span className="text-slate-500">جمع بدهکار:</span>
                   <strong className="text-red-700">
@@ -1173,29 +1173,29 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
               </div>
 
               {/* Excel-Style Grid Table (Read-Only with Linked Order/Settlement Details) */}
-              <div className="overflow-x-auto select-text">
-                <table className="w-full min-w-[780px] border-collapse text-xs">
+              <div className="flex-1 min-h-0 overflow-auto select-text">
+                <table className="w-full min-w-[780px] border-separate border-spacing-0 text-xs">
                   <thead>
                     <tr className="bg-[#e8eeea] text-slate-800 font-bold">
-                      <th className="w-11 px-2.5 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] w-11 px-2.5 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
                         #
                       </th>
-                      <th className="w-28 px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] w-28 px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
                         تاریخ
                       </th>
-                      <th className="px-3.5 py-2.5 text-right border-b border-l border-slate-300">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] px-3.5 py-2.5 text-right border-b border-l border-slate-300">
                         عنوان
                       </th>
-                      <th className="w-36 px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] w-36 px-3 py-2.5 text-center border-b border-l border-slate-300 whitespace-nowrap">
                         محل تسویه
                       </th>
-                      <th className="w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
                         بدهکار (ریال)
                       </th>
-                      <th className="w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] w-36 px-3 py-2.5 text-left border-b border-l border-slate-300 whitespace-nowrap">
                         بستانکار (ریال)
                       </th>
-                      <th className="w-40 px-3 py-2.5 text-left border-b border-slate-300 whitespace-nowrap">
+                      <th className="sticky top-0 z-10 bg-[#e8eeea] w-40 px-3 py-2.5 text-left border-b border-slate-300 whitespace-nowrap">
                         مانده بر خط (ریال)
                       </th>
                     </tr>
@@ -1362,21 +1362,21 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
                     <tr className="bg-[#e8eeea] font-bold text-slate-900 tabular-nums">
                       <td
                         colSpan={4}
-                        className="px-3.5 py-3 text-right border-t-2 border-l border-slate-400"
+                        className="sticky bottom-0 z-10 bg-[#e8eeea] px-3.5 py-3 text-right border-t-2 border-l border-slate-400"
                       >
                         جمع کل گردش و مانده نهایی
                       </td>
-                      <td className="px-3 py-3 text-left text-red-800 border-t-2 border-l border-slate-400 whitespace-nowrap">
+                      <td className="sticky bottom-0 z-10 bg-[#e8eeea] px-3 py-3 text-left text-red-800 border-t-2 border-l border-slate-400 whitespace-nowrap">
                         {new Intl.NumberFormat('fa-IR').format(
                           accountingTotals.totalDebit
                         )}
                       </td>
-                      <td className="px-3 py-3 text-left text-emerald-800 border-t-2 border-l border-slate-400 whitespace-nowrap">
+                      <td className="sticky bottom-0 z-10 bg-[#e8eeea] px-3 py-3 text-left text-emerald-800 border-t-2 border-l border-slate-400 whitespace-nowrap">
                         {new Intl.NumberFormat('fa-IR').format(
                           accountingTotals.totalCredit
                         )}
                       </td>
-                      <td className="px-3 py-3 text-left text-slate-950 border-t-2 border-slate-400 whitespace-nowrap">
+                      <td className="sticky bottom-0 z-10 bg-[#e8eeea] px-3 py-3 text-left text-slate-950 border-t-2 border-slate-400 whitespace-nowrap">
                         {accountingTotals.finalBalance === 0
                           ? '۰ (تسویه)'
                           : `${new Intl.NumberFormat('fa-IR').format(

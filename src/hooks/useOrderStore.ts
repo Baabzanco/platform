@@ -5,6 +5,7 @@ import {
   INITIAL_ORDERS,
 } from '../data/initialOrders';
 import {
+  CreateInPersonSaleInput,
   CreateOrderInput,
   NotificationDepartment,
   Order,
@@ -89,8 +90,13 @@ function loadInitialState(): PersistedState {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<PersistedState>;
       if (Array.isArray(parsed.orders) && parsed.unreadByDept) {
+        const normalized = normalizeOrders(parsed.orders);
+        const hasAnyInPerson = normalized.some((o) => Boolean(o.isInPersonSale));
+        const seededInPerson = hasAnyInPerson
+          ? []
+          : INITIAL_ORDERS.filter((o) => Boolean(o.isInPersonSale));
         return {
-          orders: normalizeOrders(parsed.orders),
+          orders: [...seededInPerson, ...normalized],
           unreadByDept: {
             sales: Array.isArray(parsed.unreadByDept.sales)
               ? parsed.unreadByDept.sales
@@ -1116,7 +1122,7 @@ export function useOrderStore() {
         pushToast(
           `${label} ثبت شد`,
           `${label} سفارش ${target.code} با موفقیت بارگذاری شد.`,
-          'پنل رانندگان',
+          target.isInPersonSale ? 'فروش حضوری' : 'پنل رانندگان',
           'success'
         );
       }
@@ -1248,13 +1254,18 @@ export function useOrderStore() {
       );
 
       const isPartialReturn = target.status === 'returned';
+      const isInPerson = Boolean(target.isInPersonSale);
       pushToast(
-        isPartialReturn
-          ? `مدارک بخش تحویل‌داده‌شده تایید شد — سفارش ${target.code}`
-          : `مدارک تحویل تایید شد — سفارش ${target.code}`,
-        isPartialReturn
-          ? `عکس فاکتور و رسید پرداخت مربوط به اقلام تحویل‌داده‌شده سفارش ${target.code} (باقی‌مانده پس از مرجوعی جزئی) در بخش صدور فاکتور تایید نهایی شد.`
-          : `عکس فاکتور و رسید پرداخت ارسال‌شده توسط راننده برای سفارش ${target.code} در بخش صدور فاکتور تایید نهایی شد.`,
+        isInPerson
+          ? `مدارک فروش حضوری تایید شد — سفارش ${target.code}`
+          : isPartialReturn
+            ? `مدارک بخش تحویل‌داده‌شده تایید شد — سفارش ${target.code}`
+            : `مدارک تحویل تایید شد — سفارش ${target.code}`,
+        isInPerson
+          ? `عکس فاکتور و رسید پرداخت فروش حضوری سفارش ${target.code} (${target.customerName}) در بخش صدور فاکتور تایید نهایی شد.`
+          : isPartialReturn
+            ? `عکس فاکتور و رسید پرداخت مربوط به اقلام تحویل‌داده‌شده سفارش ${target.code} (باقی‌مانده پس از مرجوعی جزئی) در بخش صدور فاکتور تایید نهایی شد.`
+            : `عکس فاکتور و رسید پرداخت ارسال‌شده توسط راننده برای سفارش ${target.code} در بخش صدور فاکتور تایید نهایی شد.`,
         'بخش صدور فاکتور',
         'success'
       );
@@ -1262,7 +1273,7 @@ export function useOrderStore() {
     [orders, pushToast]
   );
 
-  // 15b. Invoice Issuance: reject driver-submitted delivery photos with reason -> red priority in Driver Panel
+  // 15b. Invoice Issuance: reject submitted delivery/in-person photos with reason
   const rejectDriverDocumentsInFinance = useCallback(
     (
       orderId: string,
@@ -1294,14 +1305,164 @@ export function useOrderStore() {
         })
       );
 
-      pushToast(
-        `مدارک تحویل رد شد — سفارش ${target.code}`,
-        `مدارک سفارش ${target.code} رد شد و به‌صورت قرمز در اولویت اول پنل رانندگان جهت عکاسی مجدد قرار گرفت. دلیل: ${reason}`,
-        'ارجاع فوری به راننده',
-        'danger'
-      );
+      if (target.isInPersonSale) {
+        pushToast(
+          `مدارک فروش حضوری رد شد — سفارش ${target.code}`,
+          `مدارک سفارش فروش حضوری ${target.code} (${target.customerName}) رد شد و در صفحه فروش حضوری جهت ثبت عکس مجدد مشخص گردید. دلیل: ${reason}`,
+          'ارجاع به صفحه فروش حضوری',
+          'danger'
+        );
+      } else {
+        pushToast(
+          `مدارک تحویل رد شد — سفارش ${target.code}`,
+          `مدارک سفارش ${target.code} رد شد و به‌صورت قرمز در اولویت اول پنل رانندگان جهت عکاسی مجدد قرار گرفت. دلیل: ${reason}`,
+          'ارجاع فوری به راننده',
+          'danger'
+        );
+      }
     },
     [orders, pushToast]
+  );
+
+  // 15c. In-Person Sales: create a walk-in order visible ONLY in In-Person Sales & Invoice Issuance
+  const createInPersonSale = useCallback(
+    (input: CreateInPersonSaleInput): Order => {
+      const now = Date.now();
+      const maxCode = orders.reduce((max, o) => {
+        const parsed = parseInt(o.code, 10);
+        return Number.isFinite(parsed) ? Math.max(max, parsed) : max;
+      }, 39268);
+      const nextCode = String(maxCode + 1);
+      const orderId = createId('inperson');
+      const stamp = formatTimeStamp();
+
+      const dateParts = input.deliveryDate.split('-');
+      const persianDate =
+        dateParts.length === 3
+          ? `${toPersianDigits(dateParts[0])}/${toPersianDigits(dateParts[1])}/${toPersianDigits(dateParts[2])}`
+          : toPersianDigits(input.deliveryDate);
+      const nowDate = new Date();
+      const hh = toPersianDigits(String(nowDate.getHours()).padStart(2, '0'));
+      const mm = toPersianDigits(String(nowDate.getMinutes()).padStart(2, '0'));
+
+      const newOrder: Order = {
+        id: orderId,
+        code: nextCode,
+        deliverySlot: 'فروش حضوری',
+        customerName: input.customerName.trim(),
+        customerPhone: input.customerPhone?.trim() || '',
+        district: 'تحویل حضوری',
+        address: 'تحویل حضوری در محل واحد فروش',
+        notes: input.notes?.trim() || '',
+        callDurationSeconds: 0,
+        status: 'delivered',
+        isInPersonSale: true,
+        inPersonPaymentMethod: input.paymentMethod.trim(),
+        driverName: '',
+        routeOrder: orders.filter((o) => o.deliveryDate === input.deliveryDate).length + 1,
+        deliveryDate: input.deliveryDate,
+        seenByDept: {
+          production: true,
+          finance: false,
+          shipping: true,
+        },
+        createdAt: `${persianDate} - ${hh}:${mm}`,
+        createdAtTimestamp: now,
+        lastActionAt: now,
+        driverDelivery: {
+          invoicePhoto: input.invoicePhoto,
+          paymentReceiptPhoto: input.paymentReceiptPhoto,
+          completedAt: stamp,
+          sentToFinance: true,
+          financeVerified: false,
+          financeRejected: false,
+        },
+        items: input.items.map((item, idx) => ({
+          id: `${orderId}-item-${idx + 1}`,
+          productName: item.productName.trim(),
+          requestedWeight: Number(item.weight.toFixed(2)),
+          producedWeight: Number(item.weight.toFixed(2)),
+          revisedWeight: null,
+          previousWeightBeforeDiscrepancy: null,
+          deliveredWeight: Number(item.weight.toFixed(2)),
+          returnedWeight: 0,
+          unitPrice: Math.round(item.unitPrice),
+        })),
+      };
+
+      setOrders((prev) => [newOrder, ...prev]);
+
+      const totalWeight = newOrder.items.reduce(
+        (sum, it) => sum + it.requestedWeight,
+        0
+      );
+      const totalRial = newOrder.items.reduce(
+        (sum, it) => sum + Math.round(it.requestedWeight * it.unitPrice),
+        0
+      );
+
+      const title = `فروش حضوری جدید ثبت شد — سفارش ${nextCode}`;
+      const message = `سفارش حضوری ${nextCode} برای «${newOrder.customerName}» (${formatWeight(totalWeight)} · ${formatRial(totalRial)} · نحوه خرید: ${newOrder.inPersonPaymentMethod}) به همراه عکس فاکتور و رسید جهت بررسی به بخش صدور فاکتور ارسال شد.`;
+      pushToast(title, message, 'ارسال به صدور فاکتور', 'success');
+      queueDeptNotification('finance', title, message, 'success');
+
+      return newOrder;
+    },
+    [orders, pushToast, queueDeptNotification]
+  );
+
+  // 15d. In-Person Sales: resubmit photos after Finance rejection
+  const resubmitInPersonSaleDocs = useCallback(
+    (orderId: string) => {
+      const target = orders.find((o) => o.id === orderId && o.isInPersonSale);
+      if (!target) return;
+
+      const missing: string[] = [];
+      if (!target.driverDelivery?.invoicePhoto) missing.push('عکس فاکتور');
+      if (!target.driverDelivery?.paymentReceiptPhoto)
+        missing.push('عکس رسید پرداخت');
+
+      if (missing.length > 0) {
+        pushToast(
+          'امکان ارسال مجدد مدارک وجود ندارد',
+          `برای ارسال مجدد به صدور فاکتور، بارگذاری این موارد الزامی است: ${missing.join('، ')}.`,
+          'فروش حضوری',
+          'warning'
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const stamp = formatTimeStamp();
+
+      setOrders((prev) =>
+        prev.map((order) => {
+          if (order.id !== orderId) return order;
+          return {
+            ...order,
+            lastActionAt: now,
+            seenByDept: {
+              ...order.seenByDept,
+              finance: false,
+            },
+            driverDelivery: {
+              invoicePhoto: order.driverDelivery!.invoicePhoto,
+              paymentReceiptPhoto: order.driverDelivery!.paymentReceiptPhoto,
+              completedAt: stamp,
+              sentToFinance: true,
+              financeVerified: false,
+              financeRejected: false,
+            },
+          };
+        })
+      );
+
+      const title = `ارسال مجدد مدارک فروش حضوری — سفارش ${target.code}`;
+      const message = `عکس جدید فاکتور و رسید پرداخت سفارش فروش حضوری ${target.code} (${target.customerName}) مجدداً ثبت و جهت بررسی به بخش صدور فاکتور ارسال شد.`;
+      pushToast(title, message, 'ارسال به صدور فاکتور', 'success');
+      queueDeptNotification('finance', title, message, 'success');
+    },
+    [orders, pushToast, queueDeptNotification]
   );
 
   // 16. Reset demo dataset
@@ -1352,6 +1513,8 @@ export function useOrderStore() {
     completeDriverDelivery,
     verifyDriverDocumentsInFinance,
     rejectDriverDocumentsInFinance,
+    createInPersonSale,
+    resubmitInPersonSaleDocs,
     resetDemoData,
   };
 }

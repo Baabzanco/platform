@@ -1214,6 +1214,225 @@ function buildLiveReturnSpecsForCustomer(
   return specs;
 }
 
+const SAMPLE_BANKS: Array<{ bankName: string; branchName: string }> = [
+  { bankName: 'بانک ملت', branchName: 'شعبه مرکزی تهران (کد ۶۵۱۴)' },
+  { bankName: 'بانک صادرات ایران', branchName: 'شعبه ولیعصر (کد ۱۴۸۲)' },
+  { bankName: 'بانک ملی ایران', branchName: 'شعبه بازار بزرگ (کد ۰۱۱۹)' },
+  { bankName: 'بانک پاسارگاد', branchName: 'شعبه سعادت‌آباد (کد ۲۳۰۵)' },
+  { bankName: 'بانک سامان', branchName: 'شعبه جردن (کد ۸۱۲)' },
+];
+
+const SAMPLE_CASH_CHANNELS = [
+  'کارت‌خوان سیار در محل',
+  'حواله بانکی پایا',
+  'واریز ساتنا به حساب شرکت',
+  'کارت به کارت در محل تحویل',
+];
+
+function hashCustomerSeed(customer: CustomerRecord): number {
+  const key = `${customer.id}:${customer.accountCode}`;
+  let h = 2166136261;
+  for (let i = 0; i < key.length; i += 1) {
+    h ^= key.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h);
+}
+
+function toPersianJalaliDateLabel(isoSlashDate: string, hour: number, minute: number): string {
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
+  const raw = `${isoSlashDate} · ساعت ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  return raw.replace(/\d/g, (d) => persianDigits[Number(d)]);
+}
+
+function addDaysInSummer1405(dayOffset: number): string {
+  // Months 3, 4, 5, 6 in Jalali all have 31 days (total 124 days: 1405/03/01 .. 1405/06/31)
+  const clamped = Math.max(0, Math.min(120, dayOffset));
+  const month = 3 + Math.floor(clamped / 31);
+  const day = 1 + (clamped % 31);
+  return `1405/${String(month).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+}
+
+/**
+ * Generates deterministic, realistic settled historical invoice + payment rows dated
+ * earlier than 1405/07/01 so every customer displays 12–19 rich clickable transactions
+ * while preserving their exact current ending balance.
+ */
+function buildHistoricalSampleSpecs(
+  customer: CustomerRecord,
+  existingCount: number
+): RawLedgerSpec[] {
+  const seed = hashCustomerSeed(customer);
+  // Target total between 12 and 19 transactions per customer
+  const targetTotal = 12 + (seed % 8);
+  const needed = Math.max(0, targetTotal - existingCount);
+  if (needed < 2) return [];
+
+  const specs: RawLedgerSpec[] = [];
+  const isCreditCustomer = customer.credit.paymentMode === 'credit';
+  const baseOrderNum = 101100 + ((seed % 70) * 20);
+
+  // If needed is odd, build 1 three-row sequence (invoice + 2 split settlements)
+  // and (needed - 3) / 2 two-row sequences; otherwise needed / 2 two-row sequences.
+  const hasThreeRowGroup = needed % 2 === 1;
+  const pairCount = hasThreeRowGroup ? (needed - 3) / 2 : needed / 2;
+  const totalGroups = pairCount + (hasThreeRowGroup ? 1 : 0);
+
+  const dayStep = Math.max(4, Math.floor(110 / Math.max(1, totalGroups)));
+
+  for (let g = 0; g < totalGroups; g += 1) {
+    const groupSeed = seed + g * 97;
+    const orderCode = String(baseOrderNum + g * 3 + 1);
+    const driverName = SAMPLE_DRIVERS[groupSeed % SAMPLE_DRIVERS.length];
+    const deliverySlot = SAMPLE_SLOTS[groupSeed % SAMPLE_SLOTS.length];
+    const invoiceDayOffset = 3 + g * dayStep;
+    const invoiceDate = addDaysInSummer1405(invoiceDayOffset);
+
+    // Clean wholesale amount between 65M and 245M Rials
+    const amountRial = (13 + (groupSeed % 37)) * 5_000_000;
+    const useCheque = isCreditCustomer
+      ? groupSeed % 3 !== 0
+      : groupSeed % 5 === 0;
+    const bank = SAMPLE_BANKS[groupSeed % SAMPLE_BANKS.length];
+    const cashChannel = SAMPLE_CASH_CHANNELS[groupSeed % SAMPLE_CASH_CHANNELS.length];
+    const payHour = 10 + (groupSeed % 7);
+    const payMinute = (groupSeed * 7) % 60;
+
+    if (hasThreeRowGroup && g === 0) {
+      // 3-row group: Invoice + Advance Cash Payment + Final Settlement (exact zero net)
+      const firstPart = Math.round((amountRial * 0.4) / 1_000_000) * 1_000_000;
+      const secondPart = amountRial - firstPart;
+      const secondDate = addDaysInSummer1405(invoiceDayOffset + 2);
+
+      specs.push({
+        date: invoiceDate,
+        title: `ایجاد فاکتور با شماره سفارش ${orderCode}`,
+        debitRial: amountRial,
+        kind: 'debit',
+        orderCode,
+        settlementMethod: useCheque ? 'cheque' : 'cash',
+        driverName,
+        deliverySlot,
+        statusLabel: 'تحویل‌شده و تسویه کامل (دو مرحله‌ای)',
+      });
+
+      specs.push({
+        date: invoiceDate,
+        title: `دریافت پیش‌پرداخت نقدی بابت سفارش ${orderCode}`,
+        creditRial: firstPart,
+        kind: 'credit',
+        orderCode,
+        settlementMethod: 'cash',
+        driverName,
+        cash: {
+          channelLabel: cashChannel,
+          trackingCode: `RRN-${String(720000 + (groupSeed % 250000))}`,
+          paidAt: toPersianJalaliDateLabel(invoiceDate, payHour, payMinute),
+          driverName,
+        },
+      });
+
+      if (useCheque) {
+        specs.push({
+          date: secondDate,
+          title: `تسویه مانده با چک صیادی بابت سفارش ${orderCode} (پاس‌شده)`,
+          creditRial: secondPart,
+          kind: 'credit',
+          orderCode,
+          settlementMethod: 'cheque',
+          driverName,
+          cheque: {
+            sayadiId: `4105${String(100000000000 + ((groupSeed * 7919) % 899999999999)).slice(0, 12)}`,
+            chequeNumber: `${String(410000 + (groupSeed % 580000))} / ${String(10 + (g % 80))}`,
+            bankName: bank.bankName,
+            branchName: bank.branchName,
+            dueDate: addDaysInSummer1405(invoiceDayOffset + 12),
+            amountRial: secondPart,
+            status: 'cleared',
+            statusNote: 'چک صیادی در سررسید با موفقیت پاس و تسویه کامل ثبت گردید.',
+          },
+        });
+      } else {
+        specs.push({
+          date: secondDate,
+          title: `واریز مانده تسویه نقدی بابت سفارش ${orderCode}`,
+          creditRial: secondPart,
+          kind: 'credit',
+          orderCode,
+          settlementMethod: 'cash',
+          driverName,
+          cash: {
+            channelLabel: 'حواله بانکی پایا',
+            trackingCode: `PAYA-${String(840000 + (groupSeed % 150000))}`,
+            paidAt: toPersianJalaliDateLabel(secondDate, payHour, payMinute),
+            driverName,
+          },
+        });
+      }
+      continue;
+    }
+
+    // Standard 2-row group: Invoice Debit + Settled Credit
+    const settleDate = useCheque
+      ? addDaysInSummer1405(invoiceDayOffset + 2)
+      : invoiceDate;
+
+    specs.push({
+      date: invoiceDate,
+      title: `ایجاد فاکتور با شماره سفارش ${orderCode}`,
+      debitRial: amountRial,
+      kind: 'debit',
+      orderCode,
+      settlementMethod: useCheque ? 'cheque' : 'cash',
+      driverName,
+      deliverySlot,
+      statusLabel: useCheque
+        ? 'تحویل‌شده و تسویه کامل با چک صیادی'
+        : 'تحویل‌شده و تسویه کامل نقدی',
+    });
+
+    if (useCheque) {
+      specs.push({
+        date: settleDate,
+        title: `دریافت چک صیادی بابت سفارش ${orderCode} (پاس‌شده)`,
+        creditRial: amountRial,
+        kind: 'credit',
+        orderCode,
+        settlementMethod: 'cheque',
+        driverName,
+        cheque: {
+          sayadiId: `4105${String(100000000000 + ((groupSeed * 6271) % 899999999999)).slice(0, 12)}`,
+          chequeNumber: `${String(320000 + (groupSeed % 650000))} / ${String(12 + (g % 75))}`,
+          bankName: bank.bankName,
+          branchName: bank.branchName,
+          dueDate: addDaysInSummer1405(invoiceDayOffset + 14),
+          amountRial,
+          status: 'cleared',
+          statusNote: 'چک صیادی در سررسید پاس شد و فاکتور به‌طور کامل تسویه گردید.',
+        },
+      });
+    } else {
+      specs.push({
+        date: settleDate,
+        title: `دریافت تسویه نقدی بابت سفارش ${orderCode}`,
+        creditRial: amountRial,
+        kind: 'credit',
+        orderCode,
+        settlementMethod: 'cash',
+        driverName,
+        cash: {
+          channelLabel: cashChannel,
+          trackingCode: `POS-${String(510000 + (groupSeed % 470000))}`,
+          paidAt: toPersianJalaliDateLabel(settleDate, payHour, payMinute),
+          driverName,
+        },
+      });
+    }
+  }
+
+  return specs;
+}
+
 /**
  * Returns read-only Excel-style accounting ledger entries for any customer,
  * enriched with order items, settlement method (cash vs cheque), cheque info,
@@ -1227,10 +1446,11 @@ export function getCustomerAccountingEntries(
 
   const seeded = SEEDED_SPECS_BY_CUSTOMER_ID[customer.id];
   if (seeded) {
+    const historicalSpecs = buildHistoricalSampleSpecs(customer, seeded.length);
     return buildLedger(
       customer.id,
       customer,
-      [...seeded, ...liveReturnSpecs],
+      [...historicalSpecs, ...seeded, ...liveReturnSpecs],
       liveOrders
     );
   }
@@ -1243,42 +1463,47 @@ export function getCustomerAccountingEntries(
     customer.credit.paymentMode === 'cash' ||
     customer.credit.usedCreditRial <= 0
   ) {
+    const fallbackCashSpecs: RawLedgerSpec[] = [
+      {
+        date: '1405/09/01',
+        title: `ایجاد فاکتور با شماره سفارش ${baseOrderNum}`,
+        debitRial: 85_000_000,
+        kind: 'debit',
+        orderCode: baseOrderNum,
+        settlementMethod: 'cash',
+        driverName: 'رضا احمدی',
+        deliverySlot: '۱۰ تا ۱۲',
+        statusLabel: 'تحویل‌شده و تسویه کامل نقدی',
+      },
+      {
+        date: '1405/09/01',
+        title: `دریافت تسویه نقدی بابت سفارش ${baseOrderNum}`,
+        creditRial: 85_000_000,
+        kind: 'credit',
+        orderCode: baseOrderNum,
+        settlementMethod: 'cash',
+        cash: {
+          channelLabel: 'کارت‌خوان سیار در محل',
+          trackingCode: `RRN-90${baseOrderNum}`,
+          paidAt: '۱۴۰۵/۰۹/۰۱ · ساعت ۱۱:۲۰',
+          driverName: 'رضا احمدی',
+        },
+      },
+      {
+        date: '1405/09/01',
+        title: 'مانده بدهی جاری طرف حساب',
+        kind: 'balance',
+      },
+    ];
+    const historicalSpecs = buildHistoricalSampleSpecs(
+      customer,
+      fallbackCashSpecs.length
+    );
+
     return buildLedger(
       customer.id,
       customer,
-      [
-        {
-          date: '1405/09/01',
-          title: `ایجاد فاکتور با شماره سفارش ${baseOrderNum}`,
-          debitRial: 85_000_000,
-          kind: 'debit',
-          orderCode: baseOrderNum,
-          settlementMethod: 'cash',
-          driverName: 'رضا احمدی',
-          deliverySlot: '۱۰ تا ۱۲',
-          statusLabel: 'تحویل‌شده و تسویه کامل نقدی',
-        },
-        {
-          date: '1405/09/01',
-          title: `دریافت تسویه نقدی بابت سفارش ${baseOrderNum}`,
-          creditRial: 85_000_000,
-          kind: 'credit',
-          orderCode: baseOrderNum,
-          settlementMethod: 'cash',
-          cash: {
-            channelLabel: 'کارت‌خوان سیار در محل',
-            trackingCode: `RRN-90${baseOrderNum}`,
-            paidAt: '۱۴۰۵/۰۹/۰۱ · ساعت ۱۱:۲۰',
-            driverName: 'رضا احمدی',
-          },
-        },
-        {
-          date: '1405/09/01',
-          title: 'مانده بدهی جاری طرف حساب',
-          kind: 'balance',
-        },
-        ...liveReturnSpecs,
-      ],
+      [...historicalSpecs, ...fallbackCashSpecs, ...liveReturnSpecs],
       liveOrders
     );
   }
@@ -1286,46 +1511,51 @@ export function getCustomerAccountingEntries(
   const paidPart = Math.round(customer.credit.usedCreditRial * 0.35);
   const firstInvoice = customer.credit.usedCreditRial + paidPart;
 
+  const fallbackCreditSpecs: RawLedgerSpec[] = [
+    {
+      date: '1405/08/24',
+      title: `ایجاد فاکتور با شماره سفارش ${baseOrderNum}`,
+      debitRial: firstInvoice,
+      kind: 'debit',
+      orderCode: baseOrderNum,
+      settlementMethod: 'cheque',
+      driverName: 'سعید محمدی',
+      deliverySlot: '۱۲ تا ۱۴',
+      statusLabel: 'تحویل‌شده — تسویه چکی',
+    },
+    {
+      date: '1405/08/28',
+      title: `دریافت چک صیادی بابت سفارش ${baseOrderNum}`,
+      creditRial: paidPart,
+      kind: 'credit',
+      orderCode: baseOrderNum,
+      settlementMethod: 'cheque',
+      cheque: {
+        sayadiId: `41058820${baseOrderNum}41`,
+        chequeNumber: `${baseOrderNum.slice(-5)} / 14`,
+        bankName: 'بانک ملت',
+        branchName: 'شعبه مرکزی تهران',
+        dueDate: customer.credit.dueDateJalali ?? '1405/09/25',
+        amountRial: paidPart,
+        status: 'pending',
+        statusNote: 'چک صیادی در سامانه ثبت و تایید شده است.',
+      },
+    },
+    {
+      date: '1405/08/28',
+      title: 'مانده بدهی جاری طرف حساب',
+      kind: 'balance',
+    },
+  ];
+  const historicalSpecs = buildHistoricalSampleSpecs(
+    customer,
+    fallbackCreditSpecs.length
+  );
+
   return buildLedger(
     customer.id,
     customer,
-    [
-      {
-        date: '1405/08/24',
-        title: `ایجاد فاکتور با شماره سفارش ${baseOrderNum}`,
-        debitRial: firstInvoice,
-        kind: 'debit',
-        orderCode: baseOrderNum,
-        settlementMethod: 'cheque',
-        driverName: 'سعید محمدی',
-        deliverySlot: '۱۲ تا ۱۴',
-        statusLabel: 'تحویل‌شده — تسویه چکی',
-      },
-      {
-        date: '1405/08/28',
-        title: `دریافت چک صیادی بابت سفارش ${baseOrderNum}`,
-        creditRial: paidPart,
-        kind: 'credit',
-        orderCode: baseOrderNum,
-        settlementMethod: 'cheque',
-        cheque: {
-          sayadiId: `41058820${baseOrderNum}41`,
-          chequeNumber: `${baseOrderNum.slice(-5)} / 14`,
-          bankName: 'بانک ملت',
-          branchName: 'شعبه مرکزی تهران',
-          dueDate: customer.credit.dueDateJalali ?? '1405/09/25',
-          amountRial: paidPart,
-          status: 'pending',
-          statusNote: 'چک صیادی در سامانه ثبت و تایید شده است.',
-        },
-      },
-      {
-        date: '1405/08/28',
-        title: 'مانده بدهی جاری طرف حساب',
-        kind: 'balance',
-      },
-      ...liveReturnSpecs,
-    ],
+    [...historicalSpecs, ...fallbackCreditSpecs, ...liveReturnSpecs],
     liveOrders
   );
 }
