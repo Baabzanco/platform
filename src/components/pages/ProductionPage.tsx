@@ -7,6 +7,7 @@ import {
   ChevronLeft,
   ClipboardList,
   Clock,
+  Layers,
   Printer,
   RotateCcw,
   Search,
@@ -28,7 +29,7 @@ interface ProductionPageProps {
   onOpenWeight: (order: Order, item: OrderItem) => void;
 }
 
-type ProdTab = 'orders' | 'prep';
+type ProdTab = 'orders' | 'prep' | 'prep_v2';
 type ProdFilter =
   | 'all'
   | 'in_progress'
@@ -85,6 +86,7 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
   const [activeTab, setActiveTab] = useState<ProdTab>('orders');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<ProdFilter>('all');
+  const [selectedPrepV2Product, setSelectedPrepV2Product] = useState<string | null>(null);
 
   const productionVisibleOrders = useMemo(
     () => orders.filter((o) => o.status !== 'pending_management_approval'),
@@ -138,6 +140,27 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
     [productionVisibleOrders]
   );
 
+  const activePrepV2Row = useMemo(() => {
+    if (prepSummary.rows.length === 0) return null;
+    if (selectedPrepV2Product) {
+      const match = prepSummary.rows.find(
+        (r) => r.productName === selectedPrepV2Product
+      );
+      if (match) return match;
+    }
+    return prepSummary.rows[0];
+  }, [prepSummary.rows, selectedPrepV2Product]);
+
+  const completedPrepProductsCount = useMemo(
+    () =>
+      prepSummary.rows.filter(
+        (row) =>
+          row.allocations.length > 0 &&
+          row.allocations.every((alloc) => alloc.producedWeight !== null)
+      ).length,
+    [prepSummary.rows]
+  );
+
   const handleOpenPrepWeight = (orderId: string, itemId: string) => {
     const targetOrder = orders.find((o) => o.id === orderId);
     const targetItem = targetOrder?.items.find((i) => i.id === itemId);
@@ -170,51 +193,72 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
         </button>
       </header>
 
-      {/* Internal Tabs (Segmented 2-col on mobile, clean underline tabs on desktop) */}
+      {/* Internal Tabs (Horizontal scroll on tiny screens, clean underline tabs on desktop) */}
       <div className="no-print flex flex-col gap-3">
-        <div className="grid grid-cols-2 sm:flex sm:items-center gap-1.5 sm:gap-2 p-1 sm:p-0 bg-slate-200/75 sm:bg-transparent rounded-xl sm:rounded-none sm:border-b sm:border-slate-200">
-          <button
-            type="button"
-            onClick={() => setActiveTab('orders')}
-            className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap ${
-              activeTab === 'orders'
-                ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
-                : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <ClipboardList className="w-4 h-4 shrink-0" />
-            <span>لیست سفارشات</span>
-            <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
-              ({productionVisibleOrders.length})
-            </span>
-            {readyForFinalApprovalCount > 0 && (
-              <span className="tabular-nums px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
-                {readyForFinalApprovalCount} آماده تایید
+        <div className="overflow-x-auto no-scrollbar sm:overflow-visible">
+          <div className="inline-flex min-w-full sm:flex items-center gap-1.5 sm:gap-2 p-1 sm:p-0 bg-slate-200/75 sm:bg-transparent rounded-xl sm:rounded-none sm:border-b sm:border-slate-200">
+            <button
+              type="button"
+              onClick={() => setActiveTab('orders')}
+              className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap shrink-0 ${
+                activeTab === 'orders'
+                  ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
+                  : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4 shrink-0" />
+              <span>لیست سفارشات</span>
+              <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
+                ({productionVisibleOrders.length})
               </span>
-            )}
-            {activeTab === 'orders' && (
-              <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
-            )}
-          </button>
+              {readyForFinalApprovalCount > 0 && (
+                <span className="tabular-nums px-1.5 py-0.5 rounded-md bg-emerald-600 text-white text-[10px] font-bold">
+                  {readyForFinalApprovalCount} آماده تایید
+                </span>
+              )}
+              {activeTab === 'orders' && (
+                <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('prep')}
-            className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap ${
-              activeTab === 'prep'
-                ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
-                : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Boxes className="w-4 h-4 shrink-0" />
-            <span>نیاز به آماده‌سازی</span>
-            <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
-              ({prepSummary.rows.length})
-            </span>
-            {activeTab === 'prep' && (
-              <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
-            )}
-          </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('prep')}
+              className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap shrink-0 ${
+                activeTab === 'prep'
+                  ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
+                  : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Boxes className="w-4 h-4 shrink-0" />
+              <span>نیاز به آماده‌سازی</span>
+              <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
+                ({prepSummary.rows.length})
+              </span>
+              {activeTab === 'prep' && (
+                <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('prep_v2')}
+              className={`relative min-h-[42px] sm:min-h-0 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 rounded-lg sm:rounded-none transition-colors whitespace-nowrap shrink-0 ${
+                activeTab === 'prep_v2'
+                  ? 'bg-white sm:bg-transparent text-[#0f5864] shadow-xs sm:shadow-none'
+                  : 'text-slate-600 sm:text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-4 h-4 shrink-0" />
+              <span>نیاز به آماده‌سازی ورژن ۲</span>
+              <span className="tabular-nums text-[11px] sm:text-xs font-medium text-slate-400">
+                ({prepSummary.rows.length})
+              </span>
+              {activeTab === 'prep_v2' && (
+                <span className="hidden sm:block absolute bottom-[-1px] left-0 right-0 h-0.5 bg-[#0f5864]" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Search & Scrollable Filters */}
@@ -612,6 +656,308 @@ export const ProductionPage: React.FC<ProductionPageProps> = ({
               </table>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Tab 3: Preparation Needs V2 — Per-Product Tabs with Vertical Non-Scrolling List */}
+      {activeTab === 'prep_v2' && (
+        <div className="flex flex-col gap-3.5 w-full">
+          {prepSummary.rows.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-sm text-slate-500">
+              تمامی سفارش‌های صف تولید تکمیل یا تعیین‌تکلیف شده‌اند؛ موردی برای آماده‌سازی باقی نمانده است.
+            </div>
+          ) : (
+            <>
+              {/* Summary line */}
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                <span>
+                  برای ثبت وزن، محصول مورد نظر را انتخاب کنید؛ سفارش‌ها به ترتیب زمان ثبت فاکتور زیر هم نمایش داده می‌شوند.
+                </span>
+                <span className="tabular-nums font-semibold text-slate-700">
+                  {completedPrepProductsCount} از {prepSummary.rows.length} محصول تکمیل شده
+                </span>
+              </div>
+
+              {/* Wrapping Product Tabs — No Horizontal Scroll */}
+              <div
+                role="tablist"
+                aria-label="تب محصولات نیاز به آماده‌سازی"
+                className="flex flex-wrap items-center gap-2"
+              >
+                {prepSummary.rows.map((row) => {
+                  const totalCount = row.allocations.length;
+                  const weighedCount = row.allocations.filter(
+                    (a) => a.producedWeight !== null
+                  ).length;
+                  const isComplete = totalCount > 0 && weighedCount === totalCount;
+                  const isSelected = activePrepV2Row?.productName === row.productName;
+
+                  const tabStyle = isComplete
+                    ? isSelected
+                      ? 'bg-emerald-600 border-emerald-700 text-white shadow-xs'
+                      : 'bg-emerald-50 border-emerald-400 text-emerald-900 hover:bg-emerald-100/80'
+                    : isSelected
+                      ? 'bg-[#0f5864] border-[#0f5864] text-white shadow-xs'
+                      : 'bg-white border-slate-200 text-slate-800 hover:border-[#0f5864]/60 hover:bg-slate-50';
+
+                  return (
+                    <button
+                      key={row.productName}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      onClick={() => setSelectedPrepV2Product(row.productName)}
+                      className={`min-h-[42px] px-3.5 py-2 rounded-xl border text-xs sm:text-[13px] font-bold inline-flex items-center gap-2 transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] focus-visible:ring-offset-1 ${tabStyle}`}
+                    >
+                      {isComplete && (
+                        <CheckCircle2
+                          className={`w-4 h-4 shrink-0 ${
+                            isSelected ? 'text-white' : 'text-emerald-600'
+                          }`}
+                        />
+                      )}
+                      <span>{row.productName}</span>
+                      <span
+                        className={`tabular-nums text-[11px] font-semibold ${
+                          isSelected
+                            ? 'text-white/85'
+                            : isComplete
+                              ? 'text-emerald-700'
+                              : 'text-slate-500'
+                        }`}
+                      >
+                        ({weighedCount}/{totalCount})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Active Product Panel — Vertical Stacked List (Zero Horizontal Scroll) */}
+              {activePrepV2Row && (() => {
+                const totalCount = activePrepV2Row.allocations.length;
+                const weighedCount = activePrepV2Row.allocations.filter(
+                  (a) => a.producedWeight !== null
+                ).length;
+                const isActiveProductComplete =
+                  totalCount > 0 && weighedCount === totalCount;
+
+                return (
+                  <section
+                    role="tabpanel"
+                    aria-label={`اقلام ${activePrepV2Row.productName}`}
+                    className={`bg-white rounded-xl border overflow-hidden transition-colors ${
+                      isActiveProductComplete
+                        ? 'border-emerald-400'
+                        : 'border-slate-200'
+                    }`}
+                  >
+                    {/* Active Product Header */}
+                    <div
+                      className={`px-4 sm:px-5 py-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 ${
+                        isActiveProductComplete
+                          ? 'bg-emerald-50/80 border-emerald-200'
+                          : 'bg-slate-50 border-slate-200'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isActiveProductComplete && (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                        )}
+                        <h2
+                          className={`text-sm sm:text-base font-bold ${
+                            isActiveProductComplete
+                              ? 'text-emerald-950'
+                              : 'text-slate-900'
+                          }`}
+                        >
+                          {activePrepV2Row.productName}
+                        </h2>
+                        <span
+                          className={`text-xs font-medium ${
+                            isActiveProductComplete
+                              ? 'text-emerald-700'
+                              : 'text-slate-500'
+                          }`}
+                        >
+                          {isActiveProductComplete
+                            ? '· تمام وزن‌های این محصول ثبت شد'
+                            : `· ${weighedCount} از ${totalCount} سفارش توزین شده`}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
+                        <span className="text-slate-600">
+                          مجموع درخواستی:{' '}
+                          <strong className="text-slate-900">
+                            {activePrepV2Row.totalRequestedWeight} kg
+                          </strong>
+                        </span>
+                        {activePrepV2Row.totalProducedWeight > 0 && (
+                          <span className="text-emerald-800">
+                            مجموع ثبت‌شده:{' '}
+                            <strong>{activePrepV2Row.totalProducedWeight} kg</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Desktop/Tablet Column Header */}
+                    <div className="hidden sm:grid grid-cols-[44px_minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)_124px] items-center gap-3 px-5 py-2.5 bg-slate-50/70 border-b border-slate-200 text-xs font-bold text-[#0f5864]">
+                      <span className="text-center">#</span>
+                      <span>وزن درخواستی / ثبت‌شده</span>
+                      <span>بازه ارسال</span>
+                      <span>کد سفارش</span>
+                      <span className="text-left">توزین</span>
+                    </div>
+
+                    {/* Stacked Vertical Allocation Rows */}
+                    <div className="divide-y divide-slate-200">
+                      {activePrepV2Row.allocations.map((alloc, rowIdx) => {
+                        const isWeighed = alloc.producedWeight !== null;
+                        const orderTimeOnly = alloc.createdAt.includes(' - ')
+                          ? alloc.createdAt.split(' - ')[1]
+                          : alloc.createdAt;
+
+                        return (
+                          <div
+                            key={`${alloc.orderId}-${alloc.itemId}`}
+                            className={`px-4 sm:px-5 py-3 transition-colors ${
+                              isWeighed
+                                ? 'bg-emerald-50/45 hover:bg-emerald-50/75'
+                                : 'bg-white hover:bg-slate-50/80'
+                            }`}
+                          >
+                            {/* Desktop / Tablet Row */}
+                            <div className="hidden sm:grid grid-cols-[44px_minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)_124px] items-center gap-3 text-[13px]">
+                              <span className="tabular-nums text-center text-xs font-bold text-slate-500">
+                                {rowIdx + 1}
+                              </span>
+
+                              <div className="tabular-nums min-w-0">
+                                <span className="font-bold text-slate-900">
+                                  {alloc.requestedWeight} kg
+                                </span>
+                                {isWeighed && (
+                                  <span className="block text-xs font-bold text-emerald-700 mt-0.5">
+                                    ثبت‌شده: {alloc.producedWeight} kg
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="inline-flex items-center gap-1.5 text-slate-700 font-medium min-w-0">
+                                <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                <span className="truncate">{alloc.deliverySlot}</span>
+                              </div>
+
+                              <div className="min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectOrder(alloc.orderId)}
+                                  title={`زمان ثبت فاکتور: ${alloc.createdAt}`}
+                                  className="tabular-nums text-right hover:underline text-[#0056b3] font-bold inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                                >
+                                  <span>{alloc.orderCode}</span>
+                                  <span className="text-[11px] font-medium text-slate-400">
+                                    {orderTimeOnly}
+                                  </span>
+                                </button>
+                              </div>
+
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenPrepWeight(alloc.orderId, alloc.itemId)
+                                  }
+                                  className={`no-print min-h-[38px] px-3.5 py-1.5 rounded-lg text-xs font-bold inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] ${
+                                    isWeighed
+                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                      : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                  }`}
+                                >
+                                  {isWeighed ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 shrink-0" />
+                                      ثبت شد
+                                    </>
+                                  ) : (
+                                    'ثبت وزن'
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Mobile Compact Stacked Row (Zero Horizontal Scroll) */}
+                            <div className="sm:hidden flex flex-col gap-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <span className="tabular-nums text-xs font-bold text-slate-400 shrink-0">
+                                    {rowIdx + 1}.
+                                  </span>
+                                  <div className="tabular-nums min-w-0">
+                                    <span className="text-sm font-bold text-slate-900">
+                                      {alloc.requestedWeight} kg
+                                    </span>
+                                    {isWeighed && (
+                                      <span className="block text-xs font-bold text-emerald-700">
+                                        ثبت‌شده: {alloc.producedWeight} kg
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleOpenPrepWeight(alloc.orderId, alloc.itemId)
+                                  }
+                                  className={`no-print min-h-[40px] px-3.5 py-2 rounded-lg text-xs font-bold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 ${
+                                    isWeighed
+                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                      : 'bg-[#0f5864] text-white hover:bg-[#0b434d]'
+                                  }`}
+                                >
+                                  {isWeighed ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 shrink-0" />
+                                      ثبت شد
+                                    </>
+                                  ) : (
+                                    'ثبت وزن'
+                                  )}
+                                </button>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 pr-5">
+                                <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  بازه: {alloc.deliverySlot}
+                                </span>
+                                <span aria-hidden="true" className="text-slate-300">
+                                  ·
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectOrder(alloc.orderId)}
+                                  className="tabular-nums text-[#0056b3] font-bold hover:underline inline-flex items-center gap-1"
+                                >
+                                  <span>کد {alloc.orderCode}</span>
+                                  <span className="text-[11px] font-normal text-slate-400">
+                                    ({orderTimeOnly})
+                                  </span>
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })()}
+            </>
+          )}
         </div>
       )}
     </div>
