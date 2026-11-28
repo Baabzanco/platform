@@ -259,10 +259,7 @@ export const CustomerProfilePage: React.FC<CustomerProfilePageProps> = ({
       totalDebit += row.debitRial;
       totalCredit += row.creditRial;
     }
-    const finalBalance =
-      accountingEntries.length > 0
-        ? accountingEntries[accountingEntries.length - 1].runningBalanceRial
-        : 0;
+    const finalBalance = totalDebit - totalCredit;
     return { totalDebit, totalCredit, finalBalance };
   }, [accountingEntries]);
 

@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock,
   Edit3,
+  ExternalLink,
   Eye,
   Lock,
   MapPin,
@@ -77,6 +78,7 @@ interface OrderDetailModalProps {
   onConfirmReturn: (orderId: string, dept: WorkflowDepartment) => void;
   onOpenReturnToSales: (order: Order, source: ReturnToSalesSource) => void;
   onEditReturnedOrder?: (order: Order) => void;
+  onOpenCustomerProfile?: (order: Order) => void;
 }
 
 export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
@@ -102,6 +104,7 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
   onConfirmReturn,
   onOpenReturnToSales,
   onEditReturnedOrder,
+  onOpenCustomerProfile,
 }) => {
   const [zoomedDoc, setZoomedDoc] = useState<{
     title: string;
@@ -357,9 +360,21 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({
                       طرف حساب و وضعیت اعتباری
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-bold text-slate-900 truncate max-w-full">
-                        {order.customerName}
-                      </span>
+                      {onOpenCustomerProfile ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenCustomerProfile(order)}
+                          title="مشاهده پروفایل طرف حساب"
+                          className="group inline-flex items-center gap-1 max-w-full font-bold text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/40 hover:decoration-[#083942] underline-offset-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                        >
+                          <span className="truncate">{order.customerName}</span>
+                          <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ) : (
+                        <span className="font-bold text-slate-900 truncate max-w-full">
+                          {order.customerName}
+                        </span>
+                      )}
                       <CreditStandingTag
                         standing={order.customerStanding}
                         standingLabel={order.customerStandingLabel}

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Camera,
   ChevronLeft,
+  ExternalLink,
   Printer,
   RotateCcw,
   Scale,
@@ -30,6 +31,7 @@ interface FinancePageProps {
   access: AccessControlHelpers;
   onPrintAll: () => void;
   onSelectOrder: (orderId: string) => void;
+  onOpenCustomerProfile: (order: Order) => void;
 }
 
 type FinanceFilter =
@@ -96,6 +98,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
   printingOrderId,
   onPrintAll,
   onSelectOrder,
+  onOpenCustomerProfile,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FinanceFilter>('all');
@@ -340,10 +343,20 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                     printingOrderId === order.id ? 'print-target' : ''
                   } rounded-2xl sm:rounded-xl overflow-hidden transition-all ${cardStyle}`}
                 >
-                  <button
-                    type="button"
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => onSelectOrder(order.id)}
-                    className="w-full text-right block active:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
+                    onKeyDown={(e) => {
+                      if (
+                        e.target === e.currentTarget &&
+                        (e.key === 'Enter' || e.key === ' ')
+                      ) {
+                        e.preventDefault();
+                        onSelectOrder(order.id);
+                      }
+                    }}
+                    className="w-full text-right block cursor-pointer active:bg-slate-50/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f5864]"
                   >
                     {pendingReturnConfirm && (
                       <div className="no-print px-4 sm:px-5 py-2 bg-red-600 text-white flex flex-wrap items-center justify-between gap-2 text-xs font-bold">
@@ -421,9 +434,18 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                             طرف حساب و وضعیت اعتباری
                           </span>
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-semibold text-slate-900 truncate max-w-full">
-                              {order.customerName}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenCustomerProfile(order);
+                              }}
+                              title="مشاهده پروفایل طرف حساب"
+                              className="group inline-flex items-center gap-1 max-w-full font-semibold text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/40 hover:decoration-[#083942] underline-offset-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                            >
+                              <span className="truncate">{order.customerName}</span>
+                              <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                            </button>
                             <CreditStandingTag
                               standing={order.customerStanding}
                               standingLabel={order.customerStandingLabel}
@@ -464,7 +486,7 @@ export const FinancePage: React.FC<FinancePageProps> = ({
                         <ChevronLeft className="w-4 h-4" />
                       </div>
                     </div>
-                  </button>
+                  </div>
 
                   {/* Print-only Full Detail Table */}
                   <div className="hidden print:block border-t border-slate-200 bg-white">

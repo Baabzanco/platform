@@ -143,12 +143,37 @@ function buildOrderItemsForTotal(
   return items;
 }
 
+function toSortableDateKey(dateStr: string): string {
+  const ascii = dateStr
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06f0))
+    .replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .trim();
+  const parts = ascii.split(/[/-]/);
+  if (parts.length === 3) {
+    const [y, m, day] = parts;
+    return `${y.padStart(4, '0')}/${m.padStart(2, '0')}/${day.padStart(2, '0')}`;
+  }
+  return ascii;
+}
+
 function buildLedger(
   prefix: string,
   customer: CustomerRecord,
   rows: RawLedgerSpec[],
   liveOrders?: Order[]
 ): CustomerAccountingEntry[] {
+  // Sort rows chronologically (oldest -> newest) first so running balance is accurate
+  const chronologicalRows = rows
+    .map((row, originalIdx) => ({
+      row,
+      originalIdx,
+      dateKey: toSortableDateKey(row.date),
+    }))
+    .sort(
+      (a, b) =>
+        a.dateKey.localeCompare(b.dateKey) || a.originalIdx - b.originalIdx
+    );
+
   // Pre-index order totals, settlement methods, cheque & cash details per orderCode
   const orderTotalsByCode = new Map<string, number>();
   const orderDateByCode = new Map<string, string>();
@@ -165,7 +190,7 @@ function buildLedger(
     }
   >();
 
-  for (const row of rows) {
+  for (const { row } of chronologicalRows) {
     if (!row.orderCode) continue;
     const code = row.orderCode;
     const seed = parseInt(code.replace(/\D/g, ''), 10) || 103000;
@@ -239,7 +264,7 @@ function buildLedger(
   }
 
   let balance = 0;
-  return rows.map((row, idx) => {
+  const entriesWithSeq = chronologicalRows.map(({ row, dateKey }, seq) => {
     const debit = row.debitRial ?? 0;
     const credit = row.creditRial ?? 0;
     balance = balance + debit - credit;
@@ -327,8 +352,8 @@ function buildLedger(
         ? meta?.cash
         : undefined;
 
-    return {
-      id: `${prefix}-acc-${idx + 1}`,
+    const entry: CustomerAccountingEntry = {
+      id: `${prefix}-acc-${seq + 1}`,
       date: row.date,
       title: row.title,
       debitRial: debit,
@@ -341,7 +366,14 @@ function buildLedger(
       chequeDetails: rowCheque,
       cashDetails: rowCash,
     };
+
+    return { entry, dateKey, seq };
   });
+
+  // Display newest transaction at the top and oldest at the bottom
+  return entriesWithSeq
+    .sort((a, b) => b.dateKey.localeCompare(a.dateKey) || b.seq - a.seq)
+    .map((item) => item.entry);
 }
 
 const SEEDED_SPECS_BY_CUSTOMER_ID: Record<string, RawLedgerSpec[]> = {

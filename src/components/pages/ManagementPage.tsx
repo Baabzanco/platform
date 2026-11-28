@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   Clock,
+  ExternalLink,
   Eye,
   MapPin,
   Phone,
@@ -37,6 +38,7 @@ interface ManagementPageProps {
   onApproveOrder: (orderId: string) => void;
   onOpenReturnToSales: (order: Order) => void;
   onCallCustomer: (order: Order) => void;
+  onOpenCustomerProfile: (order: Order) => void;
 }
 
 type ManagementFilter =
@@ -79,6 +81,7 @@ export const ManagementPage: React.FC<ManagementPageProps> = ({
   onApproveOrder,
   onOpenReturnToSales,
   onCallCustomer,
+  onOpenCustomerProfile,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<ManagementFilter>('all');
@@ -410,8 +413,19 @@ export const ManagementPage: React.FC<ManagementPageProps> = ({
                           </span>
                         </div>
 
-                        <div className="text-sm sm:text-[15px] font-bold text-slate-900">
-                          {order.customerName}
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenCustomerProfile(order);
+                            }}
+                            title="مشاهده پروفایل طرف حساب"
+                            className="group inline-flex items-center gap-1.5 max-w-full text-sm sm:text-[15px] font-bold text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/40 hover:decoration-[#083942] underline-offset-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                          >
+                            <span className="truncate">{order.customerName}</span>
+                            <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                          </button>
                         </div>
 
                         {(order.customerStandingLabel || linkedCustomer) && (

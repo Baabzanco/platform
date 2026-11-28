@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   Clock,
   Edit3,
+  ExternalLink,
   Eye,
   FilePlus2,
   MapPin,
@@ -42,6 +43,7 @@ interface SalesPageProps {
   onOpenNewInvoice: () => void;
   onEditReturnedOrder: (order: Order) => void;
   onCallCustomer: (order: Order) => void;
+  onOpenCustomerProfile: (order: Order) => void;
 }
 
 type SalesFilter =
@@ -118,6 +120,7 @@ export const SalesPage: React.FC<SalesPageProps> = ({
   onOpenNewInvoice,
   onEditReturnedOrder,
   onCallCustomer,
+  onOpenCustomerProfile,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<SalesFilter>('all');
@@ -397,9 +400,18 @@ export const SalesPage: React.FC<SalesPageProps> = ({
                           طرف حساب / مشتری
                         </span>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-bold text-slate-900 truncate max-w-full">
-                            {order.customerName}
-                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onOpenCustomerProfile(order);
+                            }}
+                            title="مشاهده پروفایل طرف حساب"
+                            className="group inline-flex items-center gap-1 max-w-full font-bold text-[#0f5864] hover:text-[#083942] underline decoration-[#0f5864]/40 hover:decoration-[#083942] underline-offset-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f5864] rounded"
+                          >
+                            <span className="truncate">{order.customerName}</span>
+                            <ExternalLink className="w-3.5 h-3.5 shrink-0 opacity-70 group-hover:opacity-100 transition-opacity" />
+                          </button>
                           <CreditStandingTag
                             standing={order.customerStanding}
                             standingLabel={order.customerStandingLabel}

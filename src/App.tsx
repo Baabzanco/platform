@@ -367,6 +367,80 @@ export default function App() {
     );
   };
 
+  const handleOpenCustomerProfileFromOrder = (order: Order) => {
+    const normalizedName = order.customerName.trim();
+    const baseName = normalizedName.split('/')[0]?.trim() ?? normalizedName;
+
+    let target =
+      (order.customerId
+        ? customers.find((c) => c.id === order.customerId)
+        : undefined) ??
+      customers.find(
+        (c) =>
+          c.name.trim() === normalizedName ||
+          c.name.split('/')[0]?.trim() === baseName
+      );
+
+    if (!target) {
+      const parts = normalizedName.split('/');
+      const managerName = parts[1]?.trim() || 'مسئول خرید';
+      const standing = order.customerStanding ?? 'green';
+      const isCredit = standing !== 'green';
+      const creditLimit =
+        standing === 'yellow'
+          ? 500_000_000
+          : standing === 'red' || standing === 'black'
+            ? 350_000_000
+            : 0;
+      const usedCredit =
+        standing === 'yellow'
+          ? 440_000_000
+          : standing === 'red' || standing === 'black'
+            ? 350_000_000
+            : 0;
+
+      target = createCustomer({
+        name: normalizedName,
+        managerName,
+        businessType: 'رستوران و کترینگ',
+        relationshipType: 'customer',
+        province: 'تهران',
+        city: 'تهران',
+        address: order.address,
+        phone: order.customerPhone,
+        salesRep: 'امیر مرادصالح',
+        crmRep: 'سوگند واشقانی فراهانی',
+        standing,
+        credit: {
+          paymentMode: isCredit ? 'credit' : 'cash',
+          creditLimitRial: creditLimit,
+          usedCreditRial: usedCredit,
+          creditTermDays: isCredit ? 20 : 0,
+          daysRemaining:
+            standing === 'yellow'
+              ? 4
+              : standing === 'red'
+                ? 0
+                : standing === 'black'
+                  ? -15
+                  : null,
+          dueDateJalali: isCredit ? '۶ آذر ۱۴۰۵' : undefined,
+          warningReason:
+            standing === 'yellow' || standing === 'red'
+              ? order.customerStandingLabel
+              : undefined,
+          blacklistReason:
+            standing === 'black' ? order.customerStandingLabel : undefined,
+        },
+        notes: order.notes || '',
+      });
+    }
+
+    setSelectedOrderId(null);
+    setSelectedCustomerId(target.id);
+    setActivePage('customers');
+  };
+
   const unreadCounts: Record<NotificationDepartment, number> = {
     sales: unreadByDept.sales.length,
     management: unreadByDept.management.length,
@@ -415,6 +489,7 @@ export default function App() {
                 setInvoiceModalState({ open: true, editingOrder: order })
               }
               onCallCustomer={handleCallCustomer}
+              onOpenCustomerProfile={handleOpenCustomerProfileFromOrder}
             />
           )}
 
@@ -431,6 +506,7 @@ export default function App() {
                 setReturnToSalesTarget({ order, source: 'management' })
               }
               onCallCustomer={handleCallCustomer}
+              onOpenCustomerProfile={handleOpenCustomerProfileFromOrder}
             />
           )}
 
@@ -452,6 +528,7 @@ export default function App() {
               access={FULL_ACCESS}
               onPrintAll={handlePrintAll}
               onSelectOrder={(orderId) => setSelectedOrderId(orderId)}
+              onOpenCustomerProfile={handleOpenCustomerProfileFromOrder}
             />
           )}
 
@@ -654,6 +731,7 @@ export default function App() {
             setInvoiceModalState({ open: true, editingOrder: order })
           }
           onConfirmReturn={confirmReturnByDepartment}
+          onOpenCustomerProfile={handleOpenCustomerProfileFromOrder}
         />
       )}
 
